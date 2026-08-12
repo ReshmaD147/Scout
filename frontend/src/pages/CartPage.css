@@ -472,3 +472,37 @@
   color: var(--color-text-muted);
   margin-bottom: 20px;
 }
+
+.cart-receipt {
+  text-align: left;
+  background: var(--color-card-bg);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 16px 18px;
+  margin: 8px 0 20px;
+}
+
+.cart-receipt-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--color-text);
+  margin: 0 0 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+}
+
+.cart-receipt-line {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  padding: 4px 0;
+}
+
+.cart-receipt-total {
+  border-top: 1px solid var(--color-border);
+  margin-top: 8px;
+  padding-top: 10px;
+  font-weight: 700;
+  color: var(--color-text);
+}

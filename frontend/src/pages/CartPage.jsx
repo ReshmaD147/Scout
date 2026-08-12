@@ -77,14 +77,28 @@ export default function CartPage() {
   }
 
   if (confirmation) {
+    const orderDate = new Date(confirmation.order.created_at).toLocaleString();
     return (
       <div className="cart-confirmation">
         <p className="cart-confirmation-check">✓</p>
         <h2>Order confirmed!</h2>
         <p className="cart-confirmation-id">Order #{confirmation.order.order_id}</p>
-        <p className="cart-confirmation-total">
-          Total charged: ${confirmation.order.total.toFixed(2)}
-        </p>
+        <p className="cart-confirmation-note">{orderDate}</p>
+
+        <div className="cart-receipt">
+          <h3 className="cart-receipt-title">Receipt</h3>
+          {confirmation.order.items.map((item) => (
+            <div className="cart-receipt-line" key={item.product_id}>
+              <span>{item.name} × {item.quantity}</span>
+              <span>${(item.price_at_purchase * item.quantity).toFixed(2)}</span>
+            </div>
+          ))}
+          <div className="cart-receipt-line cart-receipt-total">
+            <span>Total charged</span>
+            <span>${confirmation.order.total.toFixed(2)}</span>
+          </div>
+        </div>
+
         <p className="cart-confirmation-note">
           Payment status: {confirmation.paymentIntent.status} (Stripe test mode)
         </p>
