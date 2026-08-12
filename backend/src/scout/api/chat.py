@@ -1,0 +1,193 @@
+import json
+import uuid
+
+from fastapi import APIRouter, HTTPException, Request
+from pydantic import BaseModel, Field, field_validator
+from sse_starlette.sse import EventSourceResponse
+
+from scout.agents.supervisor import ask, ask_streaming, SPECIALIST_NAMES
+from scout.config import settings
+from scout.services.chat_feedback_service import record_chat_feedback
+
+router = APIRouter()
+
+# In-memory session store: session_id -> message history.
+# Dev-only simplification — resets on restart, doesn't scale across
+# multiple server processes.
+SESSION_HISTORIES: dict[str, list[dict]] = {}
+SESSION_CONTEXTS: dict[str, dict] = {}
+
+
+class ChatRequest(BaseModel):
+    message: str
+    session_id: str | None = None
+
+
+class ChatResponse(BaseModel):
+    session_id: str
+    reply: str
+    products: list[dict] = []
+
+
+class ChatFeedbackRequest(BaseModel):
+    session_id: str
+    message_index: int
+    rating: str
+    user_message: str = ""
+    assistant_reply: str = ""
+    products: list[dict] = Field(default_factory=list)
+
+    @field_validator("session_id")
+    @classmethod
+    def session_id_required(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("session_id is required")
+        return value
+
+    @field_validator("message_index")
+    @classmethod
+    def message_index_non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("message_index must be non-negative")
+        return value
+
+    @field_validator("rating")
+    @classmethod
+    def rating_supported(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"up", "down"}:
+            raise ValueError("rating must be up or down")
+        return normalized
+
+
+class ChatFeedbackResponse(BaseModel):
+    status: str
+    feedback_id: str
+
+
+class DemoAuthRequest(BaseModel):
+    customer_id: str
+    session_id: str | None = None
+
+
+class DemoAuthSignOutRequest(BaseModel):
+    session_id: str | None = None
+
+
+class DemoAuthResponse(BaseModel):
+    session_id: str
+    authenticated_customer_id: str | None = None
+    demo_auth_enabled: bool
+
+
+@router.post("/demo-auth/sign-in", response_model=DemoAuthResponse)
+async def demo_auth_sign_in(body: DemoAuthRequest) -> DemoAuthResponse:
+    if not settings.demo_auth_enabled:
+        raise HTTPException(status_code=404, detail="Demo auth is disabled.")
+    customer_id = body.customer_id.strip()
+    if customer_id not in settings.demo_customer_ids:
+        raise HTTPException(status_code=400, detail="Unknown demo customer.")
+
+    session_id = body.session_id or str(uuid.uuid4())
+    context = SESSION_CONTEXTS.get(session_id, {})
+    context["authenticated_customer_id"] = customer_id
+    context["demo_authenticated"] = True
+    SESSION_CONTEXTS[session_id] = context
+    SESSION_HISTORIES.setdefault(session_id, [])
+    return DemoAuthResponse(
+        session_id=session_id,
+        authenticated_customer_id=customer_id,
+        demo_auth_enabled=True,
+    )
+
+
+@router.post("/demo-auth/sign-out", response_model=DemoAuthResponse)
+async def demo_auth_sign_out(body: DemoAuthSignOutRequest) -> DemoAuthResponse:
+    if not settings.demo_auth_enabled:
+        raise HTTPException(status_code=404, detail="Demo auth is disabled.")
+    session_id = body.session_id or str(uuid.uuid4())
+    context = SESSION_CONTEXTS.get(session_id, {})
+    context.pop("authenticated_customer_id", None)
+    context.pop("demo_authenticated", None)
+    SESSION_CONTEXTS[session_id] = context
+    return DemoAuthResponse(
+        session_id=session_id,
+        authenticated_customer_id=None,
+        demo_auth_enabled=True,
+    )
+
+
+@router.post("/chat", response_model=ChatResponse)
+async def chat(request: Request, body: ChatRequest) -> ChatResponse:
+    session_id = body.session_id or str(uuid.uuid4())
+    history = SESSION_HISTORIES.get(session_id, [])
+    conversation_context = SESSION_CONTEXTS.get(session_id, {})
+
+    supervisor_app = request.app.state.supervisor_app
+    reply, updated_history, products = await ask(
+        supervisor_app,
+        history,
+        body.message,
+        conversation_context=conversation_context,
+    )
+
+    SESSION_HISTORIES[session_id] = updated_history
+    SESSION_CONTEXTS[session_id] = conversation_context
+
+    return ChatResponse(session_id=session_id, reply=reply, products=products)
+
+
+@router.post("/chat/feedback", response_model=ChatFeedbackResponse)
+async def chat_feedback(body: ChatFeedbackRequest) -> ChatFeedbackResponse:
+    feedback_id = record_chat_feedback(
+        session_id=body.session_id,
+        message_index=body.message_index,
+        rating=body.rating,
+        user_message=body.user_message,
+        assistant_reply=body.assistant_reply,
+        products=body.products,
+    )
+    return ChatFeedbackResponse(status="ok", feedback_id=feedback_id)
+
+
+@router.post("/chat/stream")
+async def chat_stream(request: Request, body: ChatRequest):
+    """Streams real progress events (understanding_request,
+    searching_products, checking_inventory, verifying_claims,
+    preparing_response) as the request genuinely moves through the
+    supervisor/specialist graph, then emits the final, verification-gated
+    reply in one 'done' event. No partial/unverified answer text is ever
+    streamed — only real progress signals plus the finished, checked
+    answer, matching the same verification pipeline the non-streaming
+    /chat endpoint uses via ask()."""
+    session_id = body.session_id or str(uuid.uuid4())
+    history = SESSION_HISTORIES.get(session_id, [])
+    conversation_context = SESSION_CONTEXTS.get(session_id, {})
+
+    supervisor_app = request.app.state.supervisor_app
+
+    async def event_generator():
+        yield {"event": "session", "data": session_id}
+
+        try:
+            async for kind, payload in ask_streaming(
+                supervisor_app,
+                history,
+                body.message,
+                conversation_context=conversation_context,
+            ):
+                if kind == "progress":
+                    yield {"event": "progress", "data": payload}
+                else:
+                    reply_text, products = payload
+                    SESSION_HISTORIES[session_id] = history
+                    SESSION_CONTEXTS[session_id] = conversation_context
+                    yield {
+                        "event": "done",
+                        "data": json.dumps({"reply": reply_text, "products": products}),
+                    }
+        except Exception:
+            yield {"event": "error", "data": "Something went wrong processing that request."}
+            return
+
+    return EventSourceResponse(event_generator())

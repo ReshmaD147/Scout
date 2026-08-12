@@ -1,0 +1,58 @@
+[
+  {
+    "id": "CONV-01",
+    "description": "Cross-agent memory: product mentioned in turn 1 resolved correctly in turns 2 and 3, across a specialist handoff",
+    "turns": [
+      {
+        "query": "Recommend a dress under $80",
+        "expect_products": true,
+        "must_contain_any": ["dress"]
+      },
+      {
+        "query": "Is the black midi dress in a medium?",
+        "expect_products": false,
+        "must_contain_any": ["out of stock", "medium"],
+        "must_not_contain": ["which product", "product id", "which dress"]
+      },
+      {
+        "query": "Is it available to pick up at Maple Grove?",
+        "expect_products": false,
+        "must_contain_any": ["maple grove"],
+        "must_not_contain": ["which product", "which item", "what item"]
+      }
+    ]
+  },
+  {
+    "id": "CONV-02",
+    "description": "Recommendation context carried into a follow-up refinement. Turn 1 has no budget/style given, correctly expects a clarifying question. Turn 2 gives a specific category (hiking) but still no budget — the agent MAY reasonably either search directly OR ask once more for a budget on an unbounded category like this; both are acceptable, so this only requires the reply to acknowledge \"hiking\" specifically, not that products are necessarily returned yet.",
+    "turns": [
+      {
+        "query": "Show me some shoes",
+        "expect_products": false,
+        "must_contain_any": ["budget", "type", "style", "?"]
+      },
+      {
+        "query": "What about something for hiking specifically?",
+        "expect_products": false,
+        "must_contain_any": ["hik"]
+      }
+    ]
+  },
+  {
+    "id": "CONV-03",
+    "description": "Topic switch mid-conversation: policy question after a product discussion, should not confuse contexts",
+    "turns": [
+      {
+        "query": "Recommend a dress under $80",
+        "expect_products": true,
+        "must_contain_any": ["dress"]
+      },
+      {
+        "query": "What's your return policy?",
+        "expect_products": false,
+        "must_contain_any": ["return", "day"],
+        "must_not_contain": ["dress"]
+      }
+    ]
+  }
+]

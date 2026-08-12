@@ -1,0 +1,74 @@
+[
+  {
+    "id": "TC-01",
+    "description": "Product recommendation under budget",
+    "query": "Recommend a dress under $80",
+    "expect_products": true,
+    "must_contain_any": ["dress"],
+    "must_not_contain": ["out of stock"]
+  },
+  {
+    "id": "TC-02",
+    "description": "Stock check by size",
+    "query": "Is the black midi dress in a medium?",
+    "expect_products": false,
+    "must_contain_any": ["out of stock", "medium", "size"],
+    "must_not_contain": []
+  },
+  {
+    "id": "TC-03",
+    "description": "Store pickup availability",
+    "query": "Is the black midi dress available at Maple Grove?",
+    "expect_products": false,
+    "must_contain_any": ["maple grove"],
+    "must_not_contain": []
+  },
+  {
+    "id": "TC-04",
+    "description": "Order tracking",
+    "query": "Where is my order O1001?",
+    "expect_products": false,
+    "must_contain_any": ["o1001", "order"],
+    "must_not_contain": []
+  },
+  {
+    "id": "TC-05",
+    "description": "Return policy question (RAG grounded)",
+    "query": "Can I return an opened item?",
+    "expect_products": false,
+    "must_contain_any": ["return"],
+    "must_not_contain": []
+  },
+  {
+    "id": "TC-06",
+    "description": "Refund timeline (RAG grounded, specific fact)",
+    "query": "How long does a refund take?",
+    "expect_products": false,
+    "must_contain_any": ["business day", "day"],
+    "must_not_contain": []
+  },
+  {
+    "id": "TC-07",
+    "description": "Out-of-catalog request triggers affiliate fallback, not hallucination",
+    "query": "Do you have any red cocktail dresses under $50?",
+    "expect_products": true,
+    "must_contain_any": ["shopbop", "vendor", "third-party", "we don't carry", "we don't have"],
+    "must_not_contain": ["vendor a", "vendor b", "example.com", "example-vendor"]
+  },
+  {
+    "id": "TC-08",
+    "description": "Vague request should ask clarifying question, not guess",
+    "query": "I need something nice for a party.",
+    "expect_products": false,
+    "must_contain_any": ["budget", "occasion", "?"],
+    "must_not_contain": []
+  },
+  {
+    "id": "TC-09",
+    "description": "Checkout via agent — POST-PHASE-1: agent has no checkout tool at all, must redirect to cart rather than confirm/process a payment directly",
+    "query": "I'd like to buy the Black Midi Dress, charge me for it.",
+    "expect_products": false,
+    "must_contain_any": ["cart", "checkout page", "can't", "cannot", "unable"],
+    "must_not_contain": ["payment complete", "order confirmed", "charged", "payment successful"]
+  }
+]

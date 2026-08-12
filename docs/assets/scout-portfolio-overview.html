@@ -1,0 +1,285 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style>
+:root {
+  --background: #ffffff;
+  --foreground: #24212f;
+  --card: #ffffff;
+  --card-foreground: #24212f;
+  --primary: #3f2a72;
+  --muted: #f1eef8;
+  --muted-foreground: #8d829e;
+  --border: #ded7ec;
+  --destructive: #d31135;
+  --viz-series-2: #7957ff;
+  --viz-series-3: #19a45b;
+  --viz-series-4: #f59e0b;
+}
+body {
+  margin: 0;
+  background: #ffffff;
+  color: var(--foreground);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 18px;
+  line-height: 1.35;
+  padding: 24px;
+}
+</style></head><body><div id="scout-portfolio-architecture-v2" class="scout-portfolio-v2" aria-label="Scout portfolio architecture overview with current routing and commerce boundaries">
+  <style>
+    #scout-portfolio-architecture-v2 {
+      --sp-blue: color-mix(in srgb, var(--primary) 70%, var(--foreground));
+      --sp-blue-soft: color-mix(in srgb, var(--primary) 10%, var(--card));
+      --sp-green: color-mix(in srgb, var(--viz-series-3) 64%, var(--foreground));
+      --sp-green-soft: color-mix(in srgb, var(--viz-series-3) 12%, var(--card));
+      --sp-purple: color-mix(in srgb, var(--viz-series-2) 62%, var(--primary));
+      --sp-purple-soft: color-mix(in srgb, var(--viz-series-2) 12%, var(--card));
+      --sp-orange: color-mix(in srgb, var(--viz-series-4) 70%, var(--foreground));
+      --sp-orange-soft: color-mix(in srgb, var(--viz-series-4) 14%, var(--card));
+      --sp-red: color-mix(in srgb, var(--destructive) 72%, var(--foreground));
+      --sp-red-soft: color-mix(in srgb, var(--destructive) 10%, var(--card));
+      --sp-line: color-mix(in srgb, var(--muted-foreground) 42%, transparent);
+      color: var(--foreground);
+      font: inherit;
+      width: 100%;
+    }
+    #scout-portfolio-architecture-v2 * { box-sizing: border-box; }
+    #scout-portfolio-architecture-v2 .shell {
+      max-width: 980px;
+      margin: 0 auto;
+      display: grid;
+      gap: 12px;
+    }
+    #scout-portfolio-architecture-v2 .hero,
+    #scout-portfolio-architecture-v2 .card {
+      border: 1px solid var(--border);
+      background: var(--card);
+      color: var(--card-foreground);
+      border-radius: 18px;
+      padding: 16px;
+      min-width: 0;
+    }
+    #scout-portfolio-architecture-v2 .hero {
+      border-color: var(--sp-blue);
+      background: linear-gradient(135deg, var(--sp-blue-soft), color-mix(in srgb, var(--sp-purple-soft) 48%, var(--card)));
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 14px;
+      align-items: center;
+    }
+    #scout-portfolio-architecture-v2 .blue { background: var(--sp-blue-soft); border-color: var(--sp-blue); }
+    #scout-portfolio-architecture-v2 .green { background: var(--sp-green-soft); border-color: var(--sp-green); }
+    #scout-portfolio-architecture-v2 .purple { background: var(--sp-purple-soft); border-color: var(--sp-purple); }
+    #scout-portfolio-architecture-v2 .orange { background: var(--sp-orange-soft); border-color: var(--sp-orange); }
+    #scout-portfolio-architecture-v2 .red { background: var(--sp-red-soft); border-color: var(--sp-red); }
+    #scout-portfolio-architecture-v2 .title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-weight: 500;
+      margin-bottom: 7px;
+    }
+    #scout-portfolio-architecture-v2 .title span:first-child { font-size: 1.2em; }
+    #scout-portfolio-architecture-v2 .hero-title {
+      font-weight: 500;
+      font-size: 1.3em;
+      margin: 0 0 5px;
+    }
+    #scout-portfolio-architecture-v2 .sub {
+      color: var(--muted-foreground);
+      margin: 0;
+    }
+    #scout-portfolio-architecture-v2 .badge {
+      border: 1px solid color-mix(in srgb, var(--sp-green) 35%, var(--border));
+      background: color-mix(in srgb, var(--card) 76%, transparent);
+      border-radius: 999px;
+      padding: 6px 10px;
+      white-space: nowrap;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+    }
+    #scout-portfolio-architecture-v2 .grid-2 {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+      gap: 12px;
+    }
+    #scout-portfolio-architecture-v2 .flow {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 8px;
+    }
+    #scout-portfolio-architecture-v2 .step,
+    #scout-portfolio-architecture-v2 .route {
+      border: 1px solid color-mix(in srgb, currentColor 32%, var(--border));
+      background: color-mix(in srgb, var(--card) 72%, transparent);
+      border-radius: 14px;
+      padding: 10px;
+      min-width: 0;
+    }
+    #scout-portfolio-architecture-v2 .step { text-align: center; color: var(--sp-purple); }
+    #scout-portfolio-architecture-v2 .step strong,
+    #scout-portfolio-architecture-v2 .route strong {
+      display: block;
+      color: var(--foreground);
+      font-weight: 500;
+      margin-bottom: 4px;
+    }
+    #scout-portfolio-architecture-v2 .step span,
+    #scout-portfolio-architecture-v2 .route span { color: var(--muted-foreground); }
+    #scout-portfolio-architecture-v2 .routes {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 9px;
+    }
+    #scout-portfolio-architecture-v2 .list {
+      display: grid;
+      gap: 8px;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+    #scout-portfolio-architecture-v2 .list li {
+      display: grid;
+      grid-template-columns: 16px minmax(0, 1fr);
+      gap: 8px;
+      align-items: start;
+    }
+    #scout-portfolio-architecture-v2 .check { color: var(--sp-green); font-weight: 500; }
+    #scout-portfolio-architecture-v2 .tools {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      margin-top: 8px;
+    }
+    #scout-portfolio-architecture-v2 .tool {
+      border: 1px solid color-mix(in srgb, var(--sp-orange) 34%, transparent);
+      background: color-mix(in srgb, var(--card) 75%, transparent);
+      border-radius: 999px;
+      padding: 4px 8px;
+      white-space: nowrap;
+      font-size: 0.9em;
+    }
+    #scout-portfolio-architecture-v2 .security {
+      border-style: dashed;
+      text-align: center;
+      color: var(--muted-foreground);
+    }
+    #scout-portfolio-architecture-v2 code {
+      background: color-mix(in srgb, var(--muted) 68%, transparent);
+      border-radius: 6px;
+      padding: 1px 5px;
+    }
+    @media (max-width: 760px) {
+      #scout-portfolio-architecture-v2 .hero,
+      #scout-portfolio-architecture-v2 .grid-2 { grid-template-columns: 1fr; }
+      #scout-portfolio-architecture-v2 .flow,
+      #scout-portfolio-architecture-v2 .routes { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 440px) {
+      #scout-portfolio-architecture-v2 .flow,
+      #scout-portfolio-architecture-v2 .routes { grid-template-columns: 1fr; }
+      #scout-portfolio-architecture-v2 .hero,
+      #scout-portfolio-architecture-v2 .card { padding: 13px; }
+    }
+  </style>
+
+  <div class="shell">
+    <section class="hero">
+      <div>
+        <p class="hero-title">Scout Retail AI Assistant</p>
+        <p class="sub">A full-stack storefront where AI helps shoppers, while code keeps commerce, data access, and factual claims safe.</p>
+      </div>
+      <div class="badge"><span aria-hidden="true">✅</span><span>Verified facts only</span></div>
+    </section>
+
+    <section class="card blue">
+      <div class="title"><span aria-hidden="true">⚙️</span><span>FastAPI Split Architecture</span></div>
+      <div class="grid-2">
+        <div class="step" style="color: var(--sp-green)"><strong>AI Assistant Lane</strong><span><code>/chat</code> + <code>/chat/stream</code></span></div>
+        <div class="step" style="color: var(--sp-orange)"><strong>Deterministic Commerce Lane</strong><span><code>/products</code>, <code>/cart/add</code>, <code>/checkout</code></span></div>
+      </div>
+    </section>
+
+    <section class="card purple">
+      <div class="title"><span aria-hidden="true">🧭</span><span>Customer Request Flow</span></div>
+      <div class="flow" aria-label="Customer request flow">
+        <div class="step"><strong>React Chat</strong><span>Storefront UI</span></div>
+        <div class="step"><strong>Smart Routing</strong><span>Direct, planned, supervised, or safe fallback</span></div>
+        <div class="step"><strong>Specialists</strong><span>5 read-only agents</span></div>
+        <div class="step"><strong>Verification</strong><span>Evidence → claims → approval</span></div>
+        <div class="step"><strong>Safe Reply</strong><span>Approved rendering</span></div>
+      </div>
+      <div class="routes" aria-label="Smart routing outcomes">
+        <div class="route" style="color: var(--sp-green)"><strong>Clear request</strong><span>Direct specialist</span></div>
+        <div class="route" style="color: var(--sp-orange)"><strong>Compound request</strong><span>Ordered orchestration</span></div>
+        <div class="route" style="color: var(--sp-purple)"><strong>Ambiguous request</strong><span>Supervisor only when needed</span></div>
+        <div class="route" style="color: var(--sp-red)"><strong>Out of scope</strong><span>Safe scope response, no tools</span></div>
+      </div>
+    </section>
+
+    <div class="grid-2">
+      <section class="card green">
+        <div class="title"><span aria-hidden="true">🤖</span><span>Agentic Assistance Lane</span></div>
+        <ul class="list">
+          <li><span class="check">✓</span><span>Intent splitter handles clear, compound, ambiguous, and out-of-scope requests.</span></li>
+          <li><span class="check">✓</span><span>Supervisor is used only when deterministic routing is not enough.</span></li>
+          <li><span class="check">✓</span><span>Recommendation, inventory, order, external offer, and policy specialists have code-selected tool allowlists.</span></li>
+          <li><span class="check">✓</span><span>Only customer-safe progress events and verified responses are emitted.</span></li>
+        </ul>
+      </section>
+
+      <section class="card orange">
+        <div class="title"><span aria-hidden="true">🛒</span><span>Deterministic Commerce Lane</span></div>
+        <ul class="list">
+          <li><span class="check">✓</span><span>Product search/details and affiliate redirects are normal FastAPI routes.</span></li>
+          <li><span class="check">✓</span><span><code>/cart/add</code> validates product, stock, price, and promotion server-side.</span></li>
+          <li><span class="check">✓</span><span>Cart update/remove/clear stays in React Context + <code>localStorage</code>.</span></li>
+          <li><span class="check">✓</span><span><code>/checkout</code> creates orders and Stripe PaymentIntents outside the agent path.</span></li>
+        </ul>
+      </section>
+    </div>
+
+    <section class="card red">
+      <div class="title"><span aria-hidden="true">🛡️</span><span>Trust Layer</span></div>
+      <ul class="list">
+        <li><span class="check">✓</span><span>Tool calls create sanitized evidence records.</span></li>
+        <li><span class="check">✓</span><span>Customer-visible facts are proposed, verified, and approved before rendering.</span></li>
+        <li><span class="check">✓</span><span>Rejected facts are not edited out of model prose — replies are rebuilt from approved claims.</span></li>
+        <li><span class="check">✓</span><span>One bounded correction attempt can run, then it re-enters the full verification pipeline.</span></li>
+      </ul>
+    </section>
+
+    <div class="grid-2">
+      <section class="card blue">
+        <div class="title"><span aria-hidden="true">🗄️</span><span>Shared Services + Data</span></div>
+        <ul class="list">
+          <li><span class="check">✓</span><span>Scout services and repositories are shared by both AI and deterministic paths.</span></li>
+          <li><span class="check">✓</span><span>SQLite stores product, stock, store, order, promotion, affiliate, and external-offer data.</span></li>
+          <li><span class="check">✓</span><span>Chroma + Ollama embeddings support policy and product retrieval.</span></li>
+        </ul>
+      </section>
+
+      <section class="card orange">
+        <div class="title"><span aria-hidden="true">🔧</span><span>11 Read-only MCP Tools</span></div>
+        <div class="tools" aria-label="Read-only MCP tools">
+          <span class="tool">search</span>
+          <span class="tool">recommend_products</span>
+          <span class="tool">alternatives</span>
+          <span class="tool">stock</span>
+          <span class="tool">stores</span>
+          <span class="tool">fulfillment_options</span>
+          <span class="tool">orders</span>
+          <span class="tool">order_history</span>
+          <span class="tool">return_eligibility</span>
+          <span class="tool">search_external_offers</span>
+          <span class="tool">retrieve_policy_chunks</span>
+        </div>
+      </section>
+    </div>
+
+    <section class="card security">
+      🔒 Read-only agent tools • Deterministic checkout/payment • No commerce mutation tools exposed to agents • Approved claims only
+    </section>
+  </div>
+</div>
+</body></html>

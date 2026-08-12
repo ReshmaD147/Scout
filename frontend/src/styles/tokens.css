@@ -1,0 +1,45 @@
+:root {
+  --color-primary: #3B2A6B;
+  --color-primary-light: #6D4AFF;
+  --color-accent: #F5A623;
+  --color-accent-text: #47300A;
+
+  --color-bg: #FAF9FC;
+  --color-surface: #ffffff;
+  --color-card-bg: #F1EDFA;
+
+  --color-text: #2C2440;
+  --color-text-secondary: #7A7192;
+  --color-text-muted: #A99FBF;
+
+  --color-border: #E4DFF2;
+
+  /* Added: semantic state colors for interaction states (hover/focus/error/success) */
+  --color-success: #148A4B;
+  --color-success-bg: #E9F7EF;
+  --color-error: #D92D40;
+  --color-error-bg: #FCEAEC;
+  --color-sale: #C8102E;
+  --color-focus-ring: #6D4AFF;
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+
+  --font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+
+  /* Added: typography scale per spec */
+  --font-size-page-heading: 28px;
+  --font-size-section-heading: 22px;
+  --font-size-product-title: 15px;
+  --font-size-price: 17px;
+  --font-size-support: 13px;
+  --font-size-button: 14px;
+
+  --font-weight-semibold: 600;
+  --font-weight-bold: 700;
+
+  /* Added: shared shadow + transition tokens for consistent, minimal elevation */
+  --shadow-sm: 0 1px 3px rgba(44, 36, 64, 0.08);
+  --transition-fast: 0.15s ease;
+}

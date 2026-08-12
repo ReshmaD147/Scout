@@ -1,0 +1,25 @@
+# Python / backend
+backend/venv/
+backend/venv_/
+backend/data/chroma/
+backend/data/chroma_products/
+backend/tests/eval/results/
+backend/retail.db
+backend/*.egg-info/
+**/__pycache__/
+*.pyc
+
+# Node / frontend
+frontend/node_modules/
+frontend/dist/
+
+# Env files (secrets)
+backend/.env
+frontend/.env
+.env
+
+# OS
+.DS_Store
+
+# Local agent scratch files
+CODEX_Task.md

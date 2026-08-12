@@ -1,0 +1,15 @@
+.env
+venv/
+# Chroma vector stores: the actual database files ARE intentionally
+# committed (small, ~1.5MB combined) so a fresh deploy has working
+# RAG/semantic search without regenerating them via Ollama at
+# build/runtime — see docs/architecture.md. Un-ignoring the directory
+# itself is required first, since git never looks inside an ignored
+# directory to evaluate exception rules.
+!data/chroma/
+!data/chroma_products/
+retail.db
+*.egg-info/
+__pycache__/
+*.pyc
+.DS_Store
