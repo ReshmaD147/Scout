@@ -39,9 +39,16 @@
   transition: transform var(--transition-fast);
 }
 
+/* Temporarily disabled: this hover scale transform was causing a
+   persistent visual gap/rendering glitch on the deployed site,
+   confirmed reproducible on hover (not just scroll) - likely a
+   browser compositing artifact with overflow:hidden + scale() on an
+   image that's still being laid out. */
+/*
 .product-card:hover .product-card-image img {
   transform: scale(1.015);
 }
+*/
 
 .product-card--dresses .product-card-image img,
 .product-card--outerwear .product-card-image img,
