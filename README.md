@@ -1,6 +1,8 @@
 # Scout — Agentic Retail Shopping Assistant
 
-Scout is a full-stack retail demo that pairs a React storefront with a verified multi-agent shopping assistant. The storefront handles browsing, cart state, saved items, and Stripe Elements checkout; the assistant answers shopping questions through a FastAPI + LangGraph backend with code-enforced tool boundaries, structured evidence, deterministic verification, and approved-only rendering.
+Scout is a multi-agent AI shopping assistant for a retail platform that handles product recommendations, inventory checks, order support, policy questions, and third-party product alternatives through one conversational experience. Instead of relying on a single AI agent to handle everything, Scout uses LangGraph to coordinate five specialized agents — recommendation, inventory, order, policy, and external-offer — with each agent focused on its own responsibility and limited to approved read-only tools.
+
+A major focus of the project is reliability and safety: Scout does not simply generate customer-facing facts such as prices, stock availability, promotions, or order status. Tool results are converted into structured evidence, factual claims are verified against real backend data, and only approved information is shown to the customer. Sensitive commerce operations stay completely outside the autonomous AI system — the agents cannot process payments, modify orders, issue refunds, change inventory, or directly access the database; those actions remain in deterministic backend services and REST APIs.
 
 The guiding rule is simple: **anything that can cost money or trust stays deterministic; the model only helps with language-shaped assistance.**
 
@@ -126,6 +128,23 @@ npm run dev
 ```
 
 The frontend expects the backend on `http://127.0.0.1:8000` for API and product image URLs.
+
+## Live Deployment
+
+Scout is deployed on [Railway](https://railway.app) as three coordinated services within a single project:
+
+- **Backend** — FastAPI app, built from `backend.Dockerfile`.
+- **Frontend** — React app, built from `frontend.Dockerfile` and served via nginx.
+- **Ollama** — a dedicated service running `ollama/ollama:latest`, used only for generating embeddings (product/policy semantic search). Chat reasoning uses `MODEL_PROVIDER=claude` in this deployment; Ollama for chat remains a local-development-only option.
+
+Backend environment variables include the standard `.env.example` settings, plus `OLLAMA_BASE_URL` pointed at the Ollama service's private Railway networking address (`http://<service-name>.railway.internal:11434`) so embeddings resolve correctly without exposing Ollama publicly.
+
+Since the SQLite database is not currently backed by a persistent volume in this deployment, it resets on every backend rebuild and needs reseeding:
+
+```bash
+python -m scout.db.seed
+python -m scout.db.update_image_urls
+```
 
 ## Validation
 
