@@ -9,3 +9,14 @@ requires-python = ">=3.10"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+
+[tool.pytest.ini_options]
+filterwarnings = [
+    # Known, harmless warning from FastAPI's own internal use of
+    # pydantic_settings - not something in our own code, confirmed by
+    # tracing main.py's lifespan function (correctly typed, standard
+    # FastAPI pattern). Silencing just this one specific warning so it
+    # doesn't clutter test output, without hiding any other warnings.
+    "ignore:Field 'lifespan' has an incomplete definition:UserWarning",
+]
