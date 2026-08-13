@@ -461,7 +461,7 @@ def test_contextual_comparison_reuses_prior_product_cards(monkeypatch):
                 "rating": 4.4,
                 "source": "internal",
                 "promotion": {"discounted_price": 57.8},
-                "image_url": "/static/products/P003.png",
+                "image_url": "/static/products/P003.jpg",
             },
             {
                 "product_id": "P004",
@@ -501,7 +501,7 @@ def test_contextual_comparison_reuses_prior_product_cards(monkeypatch):
             "price": 68.0,
             "rating": 4.4,
             "promotion": {"discounted_price": 57.8},
-            "image_url": "/static/products/P003.png",
+            "image_url": "/static/products/P003.jpg",
         }
     ]
 

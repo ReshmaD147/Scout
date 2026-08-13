@@ -183,7 +183,7 @@ def test_recommendation_evidence_complete_stops_before_final_model(monkeypatch):
     reply, _history, products = asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80."))
 
     assert "Black Midi Dress" in reply
-    assert products == [{**product, "image_url": "/static/products/P001.png"}]
+    assert products == [{**product, "image_url": "/static/products/P001.jpg"}]
     assert not agent.later_model_started
 
 

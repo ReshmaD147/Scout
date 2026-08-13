@@ -285,7 +285,7 @@ def test_product_recommendation_wording_is_customer_friendly_and_approved_only()
             "price": 68.0,
             "rating": 4.4,
             "promotion": {"discounted_price": 57.8},
-            "image_url": "/static/products/P003.png",
+            "image_url": "/static/products/P003.jpg",
         }
     ]
 
@@ -346,7 +346,7 @@ def test_verified_internal_product_uses_local_seeded_image_when_available():
             "name": "Wrap Dress",
             "source": "internal",
             "price": 68.0,
-            "image_url": "/static/products/P003.png",
+            "image_url": "/static/products/P003.jpg",
         }
     ]
 
@@ -461,7 +461,7 @@ def test_store_availability_renders_request_specific_answer_without_price_replac
             "source": "internal",
             "price": 79.99,
             "rating": 4.3,
-            "image_url": "/static/products/P001.png",
+            "image_url": "/static/products/P001.jpg",
         }
     ]
     assert "$79.99" not in reply
@@ -612,7 +612,7 @@ def test_external_offer_is_labeled_and_never_returned_as_scout_inventory():
 
 
 def test_multiple_external_offers_are_summarized_once_and_match_rendered_cards(monkeypatch, tmp_path):
-    (tmp_path / "EX001.png").write_bytes(b"fake image")
+    (tmp_path / "EX001.jpg").write_bytes(b"fake image")
     monkeypatch.setattr(rendering, "PRODUCT_IMAGES_DIR", tmp_path)
     products = [
         {"external_product_id": "EX001", "name": "Ruched Midi Dress", "price": 29.96, "vendor_name": "Nordstrom Rack", "click_url": "/affiliate/click/EX001", "source": "external"},
@@ -657,7 +657,7 @@ def test_multiple_external_offers_are_summarized_once_and_match_rendered_cards(m
     assert reply.count("return policy") == 1
     assert "Unapproved Dress" not in reply
     assert [product["external_product_id"] for product in rendered] == ["EX001", "EX011"]
-    assert rendered[0]["image_url"] == "/static/products/EX001.png"
+    assert rendered[0]["image_url"] == "/static/products/EX001.jpg"
     assert rendered[1]["image_url"] == "https://n.nordstrommedia.com/it/e6ad6561-d8a8-4c3f-82c5-d10f5bf0c02d.jpeg?h=368&w=240&dpr=2"
 
 

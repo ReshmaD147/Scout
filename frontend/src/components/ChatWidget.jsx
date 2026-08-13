@@ -264,12 +264,12 @@ function refinementPrompts(products) {
 
   const names = products.map((product) => String(product.name || "").toLowerCase()).join(" ");
   if (names.includes("dress")) {
-    return ["Compare these dresses", "Check store availability", "Black dresses", "Under $50"];
+    return ["Check store availability", "Black dresses"];
   }
   if (names.includes("shoe") || names.includes("boot") || names.includes("sneaker")) {
-    return ["Compare these shoes", "Waterproof options", "Under $70", "Check store availability"];
+    return ["Waterproof options", "Check store availability"];
   }
-  return ["Compare these", "Check store availability", "Lower price", "Similar styles"];
+  return ["Check store availability", "Similar styles"];
 }
 
 export default function ChatWidget() {

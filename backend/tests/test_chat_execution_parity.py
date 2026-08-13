@@ -24,7 +24,7 @@ PRODUCTS = [
         "price": 68.0,
         "rating": 4.4,
         "promotion": {"discounted_price": 57.8},
-        "image_url": "/static/products/P003.png",
+        "image_url": "/static/products/P003.jpg",
     },
     {
         "product_id": "P004",
@@ -33,7 +33,7 @@ PRODUCTS = [
         "price": 62.5,
         "rating": 3.9,
         "promotion": {"discounted_price": 53.12},
-        "image_url": "/static/products/P004.png",
+        "image_url": "/static/products/P004.jpg",
     },
     {
         "product_id": "P001",
@@ -42,7 +42,7 @@ PRODUCTS = [
         "price": 79.99,
         "rating": 4.3,
         "promotion": {"discounted_price": 67.99},
-        "image_url": "/static/products/P001.png",
+        "image_url": "/static/products/P001.jpg",
     },
 ]
 
@@ -210,7 +210,7 @@ def _tool_result(tool_name, args):
                     "price": 68.0,
                     "rating": 4.4,
                     "promotion": {"discounted_price": 57.8},
-                    "image_url": "/static/products/P003.png",
+                    "image_url": "/static/products/P003.jpg",
                 }
             ]
         return {
