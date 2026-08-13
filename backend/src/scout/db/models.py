@@ -80,6 +80,13 @@ class OrderItem(Base):
     product_id: Mapped[str] = mapped_column(ForeignKey("products.product_id"))
     quantity: Mapped[int] = mapped_column(Integer, default=1)
     price_at_purchase: Mapped[float] = mapped_column(Float, nullable=False)
+    # Sales attribution: set only when this item's cart-add originated from
+    # a specific Scout recommendation, validated against a real
+    # recommendation_id at checkout time (see checkout.py) - never trusted
+    # from the frontend alone, so a customer can't just claim an arbitrary
+    # purchase came from Scout.
+    attribution_source: Mapped[str | None] = mapped_column(String, nullable=True)
+    recommendation_id: Mapped[str | None] = mapped_column(String, nullable=True)
 
     order: Mapped["Order"] = relationship(back_populates="items")
 

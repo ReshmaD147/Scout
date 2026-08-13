@@ -135,6 +135,13 @@ def seed() -> None:
             session.add(Stock(product_id=pid, size=size, color=color, quantity=next(qty_cycle)))
 
     # preserve known test case: Black Midi Dress, size M, black = OUT OF STOCK
+    # Flush first - _ensure_demo_variant_inventory queries for existing
+    # Stock rows, but the loop above only called session.add() without a
+    # commit/flush, so its inserts weren't visible to that query yet.
+    # Confirmed via a real bug: this created a genuine duplicate P001/S/black
+    # row instead of updating the one the loop had just added, doubling
+    # that variant's reported quantity (3+3=6 instead of the intended 3).
+    session.flush()
     _ensure_demo_variant_inventory(session)
 
     # ── stores ──
