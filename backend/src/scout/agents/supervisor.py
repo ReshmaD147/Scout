@@ -467,6 +467,39 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
             )
         return reply, history, products
 
+    if split_result.structured_intent is not None and split_result.structured_intent.request_type == "recommendation_selection":
+        # Customer referred back to one of SEVERAL previously-shown
+        # products by ordinal or name (e.g. "I like the second one").
+        # This doesn't add to cart yet - it makes the SAME kind of
+        # explicit offer Phase 2 makes automatically for a single
+        # product, so the customer still has to say yes before anything
+        # happens. Reuses the exact same pending_cart_offer + confirmation
+        # mechanism already built and tested.
+        selected_product_id = split_result.structured_intent.product_id
+        selected_recommendation_id = split_result.structured_intent.recommendation_id
+        product_name = None
+        for item in (conversation_context or {}).get("active_selected_products") or []:
+            if item.get("product_id") == selected_product_id:
+                product_name = item.get("name")
+                break
+
+        if product_name:
+            conversation_context["pending_cart_offer"] = {
+                "product_id": selected_product_id,
+                "product_name": product_name,
+                "size": None,
+                "color": None,
+                "quantity": 1,
+                "recommendation_id": selected_recommendation_id,
+            }
+            offer_reply = f"Want me to add the {product_name} to your cart?"
+        else:
+            offer_reply = "Sorry, I couldn't identify that item. Could you name it directly?"
+
+        history.append({"role": "user", "content": sub_intents[0]})
+        history.append({"role": "assistant", "content": offer_reply})
+        return offer_reply, history, []
+
     if split_result.structured_intent is not None and split_result.structured_intent.request_type == "cart_add_confirmed":
         # Phase 2 - the customer just said "yes" to a real, specific
         # cart-add offer. This calls the EXACT SAME shared service

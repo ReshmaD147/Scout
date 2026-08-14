@@ -62,6 +62,10 @@ def _contextual_split_result(message: str, context: dict | None) -> SplitIntentR
     if cart_offer_pending is not None:
         return cart_offer_pending
 
+    recommendation_selection = _resolve_recommendation_selection(message, context)
+    if recommendation_selection is not None:
+        return recommendation_selection
+
     pending = _continue_pending_clarification(message, context)
     if pending is not None:
         return pending
@@ -234,6 +238,58 @@ def _join_context_labels(labels: list[str]) -> str:
     return f"{', '.join(labels[:-1])}, and {labels[-1]}"
 
 
+def _resolve_recommendation_selection(message: str, context: dict) -> SplitIntentResult | None:
+    """Deterministic follow-up resolver for a customer selecting one of
+    SEVERAL previously-shown products by ordinal or name - e.g. 'I like
+    the second one', 'the Wrap Dress looks nice'. Deliberately a
+    SEPARATE function from _resolve_follow_up_intent (the existing
+    availability/order resolver) rather than an extension of it, since
+    that function is narrowly, deliberately scoped to availability-style
+    follow-ups already, and broadening it risked destabilizing working,
+    tested logic. Triggers Phase 2's existing cart-offer mechanism once
+    a specific product is identified - reuses register_recommendation's
+    downstream path exactly, no new cart-add logic here at all.
+    """
+    selected = [item for item in context.get("active_selected_products") or [] if isinstance(item, dict) and item.get("product_id")]
+    if len(selected) < 2:
+        # Only meaningful when multiple products were genuinely shown -
+        # a single-product case is already handled by Phase 2's
+        # automatic offer, triggered elsewhere in api/chat.py.
+        return None
+
+    normalized = (message or "").strip().lower()
+    # Deliberately exclude anything that looks like a DIFFERENT kind of
+    # follow-up (availability, order, policy) - this resolver is only
+    # for genuine product-preference statements among shown options.
+    exclusion_terms = (
+        "available", "availability", "stock", "size", "medium", "large",
+        "small", "order", "policy", "refund", "return", "checkout",
+        "charge", "store", "pickup", "pick up", "ship", "delivery",
+    )
+    if any(term in normalized for term in exclusion_terms):
+        return None
+
+    product = _resolve_context_product(message, context)
+    if product is None or product == "ambiguous":
+        return None
+
+    structured = StructuredIntent(
+        text=f"Selected {product.get('name')} from previous recommendations",
+        request_type="recommendation_selection",
+        confidence=0.9,
+        product_id=product.get("product_id"),
+        recommendation_id=product.get("recommendation_id"),
+        extraction_source="deterministic_recommendation_selection",
+    )
+    _record_context_resolution("recommendation_selection", True, structured)
+    return SplitIntentResult(
+        sub_intents=[structured.text],
+        structured_intent=structured,
+        fast_path_used=True,
+        llm_splitter_invoked=False,
+    )
+
+
 def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent | str | None:
     base_intent = classify_clear_single_intent(message)
     normalized = (message or "").lower()
@@ -399,6 +455,39 @@ def _resolve_order_follow_up_intent(
     return structured
 
 
+ORDINAL_WORDS = {
+    "first": 0, "1st": 0, "one": 0,
+    "second": 1, "2nd": 1, "two": 1,
+    "third": 2, "3rd": 2, "three": 2,
+    "fourth": 3, "4th": 3, "four": 3,
+    "fifth": 4, "5th": 4, "five": 4,
+    "last": -1,
+}
+
+
+def _resolve_ordinal_reference(message: str, selected: list[dict]) -> dict | None:
+    """Matches phrases like 'the second one', 'the second dress', 'the
+    last option' against the exact order products were actually shown in
+    (active_selected_products, which preserves display order - see
+    _update_context_from_verified_turn in conversation.py). Deliberately
+    simple, exact-word matching - no fuzzy logic - since an incorrect
+    ordinal match here could lead to offering to add the WRONG product to
+    cart, which is a real, meaningful mistake to avoid.
+    """
+    if not selected:
+        return None
+    normalized = _normalize_context_text(message)
+    words = normalized.split()
+    for word in words:
+        if word in ORDINAL_WORDS:
+            index = ORDINAL_WORDS[word]
+            try:
+                return selected[index]
+            except IndexError:
+                return None
+    return None
+
+
 def _resolve_context_product(message: str, context: dict) -> dict | str | None:
     selected = [item for item in context.get("active_selected_products") or [] if isinstance(item, dict) and item.get("product_id")]
     normalized_message = _normalize_context_text(message)
@@ -410,6 +499,9 @@ def _resolve_context_product(message: str, context: dict) -> dict | str | None:
         return explicit_matches[0]
     if len(explicit_matches) > 1:
         return "ambiguous"
+    ordinal_match = _resolve_ordinal_reference(message, selected)
+    if ordinal_match is not None:
+        return ordinal_match
     active_id = context.get("active_product_id")
     if active_id:
         for item in selected:
