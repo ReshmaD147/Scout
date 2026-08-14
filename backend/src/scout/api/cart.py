@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 from pydantic import BaseModel
 
+from scout.agents.attribution import validate_recommendation
 from scout.db.session import SessionLocal
 from scout.repositories.product_repository import ProductRepository
 from scout.services.product_service import check_stock, _get_active_promotion_dict
@@ -13,6 +14,14 @@ class AddToCartRequest(BaseModel):
     quantity: int = 1
     size: str | None = None
     color: str | None = None
+    # Optional: present only when this cart-add originated from a Scout
+    # recommendation card. Validated below - never trusted at face value,
+    # since a customer's browser could otherwise claim any arbitrary
+    # cart-add came from Scout. An invalid/missing ID does NOT block the
+    # cart-add itself (the customer should never be prevented from buying
+    # something over an attribution technicality) - it just means this
+    # item won't be counted as Scout-assisted revenue.
+    recommendation_id: str | None = None
 
 
 def _variant_label(product_name: str, color: str | None, size: str | None) -> str:
@@ -75,6 +84,15 @@ def add_to_cart(request: AddToCartRequest):
         promotion = _get_active_promotion_dict(session, product)
         unit_price = promotion["discounted_price"] if promotion else product.price
 
+        # Attribution: independently validate the recommendation_id against
+        # the real registry (see agents/attribution.py) - never trust it
+        # just because the frontend sent it. A mismatched or unknown ID is
+        # treated as no attribution at all, same fail-closed principle
+        # already used for order authorization.
+        is_scout_attributed = validate_recommendation(
+            request.recommendation_id, product.product_id
+        )
+
         return {
             "success": True,
             "in_stock": True,
@@ -89,6 +107,8 @@ def add_to_cart(request: AddToCartRequest):
             "size": stock_info["requested_size"],
             "color": stock_info["requested_color"],
             "available_quantity": stock_info["total_quantity"],
+            "attribution_source": "scout" if is_scout_attributed else None,
+            "recommendation_id": request.recommendation_id if is_scout_attributed else None,
         }
     finally:
         session.close()
