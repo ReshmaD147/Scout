@@ -5,6 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 
+from scout.agents.attribution import register_recommendation
 from scout.agents.supervisor import ask, ask_streaming, SPECIALIST_NAMES
 from scout.config import settings
 from scout.services.chat_feedback_service import record_chat_feedback
@@ -133,6 +134,19 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
 
     SESSION_HISTORIES[session_id] = updated_history
     SESSION_CONTEXTS[session_id] = conversation_context
+
+    # Commerce analytics layer - sits entirely OUTSIDE the safety-critical
+    # evidence/claims/verification/rendering pipeline. Only ever sees
+    # already-verified products; never influences what gets shown to the
+    # customer, only tags what was already decided as genuinely
+    # recommended, for later attribution validation at cart-add time.
+    for product in products:
+        internal_product_id = product.get("product_id")
+        if internal_product_id:
+            product["recommendation_id"] = register_recommendation(
+                product_id=internal_product_id,
+                session_id=session_id,
+            )
 
     return ChatResponse(session_id=session_id, reply=reply, products=products)
 
