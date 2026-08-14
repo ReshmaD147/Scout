@@ -351,3 +351,72 @@ def find_alternatives(
             break
 
     return [*matching_color, *fallback_color][:limit]
+
+
+def add_to_cart_service(
+    session: Session,
+    product_id: str,
+    quantity: int = 1,
+    size: str | None = None,
+    color: str | None = None,
+    recommendation_id: str | None = None,
+) -> dict:
+    """Shared, deterministic cart-add validation - the single source of
+    truth called by both api/cart.py's HTTP endpoint AND Phase 2's
+    proactive cart-offer confirmation (supervisor.py). Re-validates real
+    stock and price every time, regardless of caller, since availability
+    can genuinely change between when a recommendation was made and when
+    the customer actually confirms adding it.
+    """
+    from scout.agents.attribution import validate_recommendation
+
+    product_repo = ProductRepository(session)
+    product = product_repo.get_by_id(product_id)
+
+    if not product:
+        return {"success": False, "error": "Product not found"}
+    if quantity < 1:
+        return {"success": False, "error": "Quantity must be at least 1"}
+
+    stock_info = check_stock(session, product_id, size=size, color=color)
+    requested_variant = bool(size or color)
+    if not stock_info["in_stock"]:
+        error = "Out of stock"
+        if requested_variant:
+            variant = []
+            if stock_info["requested_color"]:
+                variant.append(stock_info["requested_color"].title())
+            if stock_info["requested_size"]:
+                variant.append(f"size {stock_info['requested_size']}")
+            error = f"{product.name} in {', '.join(variant)} is currently out of stock." if variant else f"{product.name} is currently out of stock."
+        return {"success": False, "error": error, "in_stock": False}
+
+    if quantity > stock_info["total_quantity"]:
+        return {
+            "success": False,
+            "error": f"Only {stock_info['total_quantity']} available for {product.name}.",
+            "in_stock": True,
+            "available_quantity": stock_info["total_quantity"],
+        }
+
+    promotion = _get_active_promotion_dict(session, product)
+    unit_price = promotion["discounted_price"] if promotion else product.price
+    is_scout_attributed = validate_recommendation(recommendation_id, product.product_id)
+
+    return {
+        "success": True,
+        "in_stock": True,
+        "product_id": product.product_id,
+        "name": product.name,
+        "brand": product.brand,
+        "image_url": product.image_url,
+        "unit_price": unit_price,
+        "quantity": quantity,
+        "line_total": round(unit_price * quantity, 2),
+        "promotion": promotion,
+        "size": stock_info["requested_size"],
+        "color": stock_info["requested_color"],
+        "available_quantity": stock_info["total_quantity"],
+        "attribution_source": "scout" if is_scout_attributed else None,
+        "recommendation_id": recommendation_id if is_scout_attributed else None,
+    }
