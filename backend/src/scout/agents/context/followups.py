@@ -58,6 +58,10 @@ def _contextual_split_result(message: str, context: dict | None) -> SplitIntentR
     if compound_plan is not None and compound_plan.multi_intent:
         return None
 
+    cart_offer_pending = _continue_pending_cart_offer(message, context)
+    if cart_offer_pending is not None:
+        return cart_offer_pending
+
     pending = _continue_pending_clarification(message, context)
     if pending is not None:
         return pending
@@ -81,6 +85,44 @@ def _contextual_split_result(message: str, context: dict | None) -> SplitIntentR
     return SplitIntentResult(
         sub_intents=[resolved.text],
         structured_intent=resolved,
+        fast_path_used=True,
+        llm_splitter_invoked=False,
+    )
+
+
+def _continue_pending_cart_offer(message: str, context: dict) -> SplitIntentResult | None:
+    """Recognizes a genuine 'yes' to a specific, real cart-add offer Scout
+    just made (see api/chat.py, Phase 2). Deliberately strict - matches
+    only a small, fixed set of whole-message affirmatives, not a
+    substring anywhere in a longer message, since a loose match here
+    could accidentally trigger a cart-add from an unrelated reply.
+    """
+    offer = context.get("pending_cart_offer")
+    if not offer:
+        return None
+
+    normalized = (message or "").strip().strip(".!?").lower()
+    AFFIRMATIVES = {"yes", "yeah", "yep", "sure", "please", "ok", "okay", "add it", "add to cart"}
+
+    if normalized not in AFFIRMATIVES:
+        context["pending_cart_offer"] = None
+        return None
+
+    context["pending_cart_offer"] = None
+    structured = StructuredIntent(
+        text=f"Add {offer.get('product_name')} to cart",
+        request_type="cart_add_confirmed",
+        confidence=0.98,
+        product_id=offer.get("product_id"),
+        recommendation_id=offer.get("recommendation_id"),
+        size=offer.get("size"),
+        color=offer.get("color"),
+        extraction_source="deterministic_cart_offer_confirmation",
+    )
+    _record_context_resolution("cart_offer_confirmation", True, structured)
+    return SplitIntentResult(
+        sub_intents=[structured.text],
+        structured_intent=structured,
         fast_path_used=True,
         llm_splitter_invoked=False,
     )

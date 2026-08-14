@@ -8,6 +8,8 @@ import time
 from decimal import Decimal, InvalidOperation
 
 from scout.config import settings
+from scout.db.session import SessionLocal
+from scout.services.product_service import add_to_cart_service
 from scout.agents.diagnostics import (
     SAFE_TIMEOUT_REPLY,
     clear_diagnostics,
@@ -464,6 +466,37 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
                 conversation_context,
             )
         return reply, history, products
+
+    if split_result.structured_intent is not None and split_result.structured_intent.request_type == "cart_add_confirmed":
+        # Phase 2 - the customer just said "yes" to a real, specific
+        # cart-add offer. This calls the EXACT SAME shared service
+        # function api/cart.py's HTTP endpoint uses - re-validating real
+        # stock/price fresh (never trusting the original recommendation's
+        # snapshot), since availability can genuinely change between the
+        # offer and the confirmation. No new AI tool exists here; this is
+        # a deterministic response to a deterministically-recognized
+        # confirmation, identical in effect to a real button click.
+        session = SessionLocal()
+        try:
+            cart_result = add_to_cart_service(
+                session,
+                product_id=split_result.structured_intent.product_id,
+                quantity=1,
+                size=split_result.structured_intent.size,
+                color=split_result.structured_intent.color,
+                recommendation_id=split_result.structured_intent.recommendation_id,
+            )
+        finally:
+            session.close()
+
+        if cart_result.get("success"):
+            confirm_reply = f"Added the {cart_result['name']} to your cart."
+        else:
+            confirm_reply = cart_result.get("error", "Sorry, I couldn't add that to your cart.")
+
+        history.append({"role": "user", "content": sub_intents[0]})
+        history.append({"role": "assistant", "content": confirm_reply})
+        return confirm_reply, history, []
 
     direct_reply = _deterministic_conversational_reply(split_result.structured_intent, sub_intents)
     if direct_reply is not None:

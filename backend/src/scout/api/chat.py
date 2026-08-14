@@ -148,6 +148,30 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
                 session_id=session_id,
             )
 
+    # Phase 2 - proactive cart nudge. Scout gets NO new tool here; this
+    # is a deterministic check of the already-verified, already-rendered
+    # products list, matching the exact pattern used for conversation
+    # context elsewhere in this file. Only offers when there's genuinely
+    # ONE unambiguous internal product in focus - never for a list of
+    # several (e.g. right after "recommend a dress"), since "add it to
+    # your cart" would be ambiguous there. The offer's exact details are
+    # stored in context, so the next turn's confirmation can replay them
+    # precisely without re-parsing anything from free text.
+    internal_products = [p for p in products if p.get("source") == "internal"]
+    if len(internal_products) == 1 and not conversation_context.get("pending_cart_offer"):
+        offer_product = internal_products[0]
+        conversation_context["pending_cart_offer"] = {
+            "product_id": offer_product.get("product_id"),
+            "product_name": offer_product.get("name"),
+            "size": offer_product.get("size"),
+            "color": offer_product.get("color"),
+            "quantity": 1,
+            "recommendation_id": offer_product.get("recommendation_id"),
+        }
+        reply = f"{reply} Want me to add the {offer_product.get('name')} to your cart?"
+
+    SESSION_CONTEXTS[session_id] = conversation_context
+
     return ChatResponse(session_id=session_id, reply=reply, products=products)
 
 
