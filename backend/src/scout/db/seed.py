@@ -1,7 +1,7 @@
 import itertools
 
 from scout.db.session import SessionLocal, init_db
-from scout.db.models import Product, Stock, Store, StoreStock, Order, OrderItem, ExternalProduct, Promotion
+from scout.db.models import Product, Stock, Store, StoreStock, Order, OrderItem, ExternalProduct, Promotion, Shipment
 
 # ── PRODUCTS ──────────────────────────────────────────────────────────────
 # (product_id, name, brand, department, category, description, price, rating, tags)
@@ -177,6 +177,17 @@ def seed() -> None:
         OrderItem(order_id="O1003", product_id="P021", quantity=1, price_at_purchase=58.99),
     ]
     session.add_all(order_items)
+
+    # ── shipments (only O1001, which is marked "shipped" above) ──
+    session.add(Shipment(
+        shipment_id="SHIP1001",
+        order_id="O1001",
+        carrier="UPS",
+        tracking_number="1Z999AA10123456784",
+        status="in_transit",
+        shipped_at="2026-08-12",
+        estimated_delivery_date="2026-08-16",
+    ))
 
     seed_external_products(session)
     seed_promotions(session)

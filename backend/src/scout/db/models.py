@@ -91,6 +91,21 @@ class OrderItem(Base):
     order: Mapped["Order"] = relationship(back_populates="items")
 
 
+class Shipment(Base):
+    __tablename__ = "shipments"
+
+    shipment_id: Mapped[str] = mapped_column(String, primary_key=True)
+    order_id: Mapped[str] = mapped_column(ForeignKey("orders.order_id"))
+    carrier: Mapped[str] = mapped_column(String, nullable=False)
+    tracking_number: Mapped[str] = mapped_column(String, nullable=False)
+    # Deliberately a plain string, not an enum - matches the existing
+    # Order.status pattern in this codebase, rather than introducing a
+    # new, inconsistent convention for representing state.
+    status: Mapped[str] = mapped_column(String, default="label_created")
+    shipped_at: Mapped[str | None] = mapped_column(String, nullable=True)
+    estimated_delivery_date: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class ExternalProduct(Base):
     __tablename__ = "external_products"
 

@@ -5,6 +5,7 @@ from typing import Optional
 from sqlalchemy.orm import Session
 
 from scout.repositories.order_repository import OrderRepository
+from scout.repositories.shipment_repository import ShipmentRepository
 from scout.repositories.product_repository import ProductRepository
 
 AUTH_REQUIRED_ERROR = "authentication_required"
@@ -75,6 +76,45 @@ def get_order_for_customer(session: Session, order_id: str, authenticated_custom
     result["found"] = True
     result["authorized"] = True
     return result
+
+
+def get_shipment_for_customer(session: Session, order_id: str, authenticated_customer_id: str | None) -> dict:
+    """Return shipment details only when a trusted authenticated customer
+    owns the underlying order - reuses the EXACT SAME ownership check as
+    get_order_for_customer above, since shipment data is just as
+    sensitive as order data and deserves the identical fail-closed
+    guarantee. Shipment data is only ever looked up AFTER ownership is
+    confirmed, never before.
+    """
+    order_result = get_order_for_customer(session, order_id, authenticated_customer_id)
+    if not order_result.get("authorized"):
+        # Reuse whatever denial shape get_order_for_customer already
+        # produced (ACCESS_DENIED or a genuine not-found) - no separate
+        # denial logic to keep in sync here.
+        return order_result
+
+    shipment_repo = ShipmentRepository(session)
+    shipment = shipment_repo.get_by_order_id(order_id)
+    if not shipment:
+        return {
+            "found": True,
+            "authorized": True,
+            "order_id": order_id,
+            "shipped": False,
+            "message": "This order hasn't shipped yet.",
+        }
+
+    return {
+        "found": True,
+        "authorized": True,
+        "order_id": order_id,
+        "shipped": True,
+        "carrier": shipment.carrier,
+        "tracking_number": shipment.tracking_number,
+        "status": shipment.status,
+        "shipped_at": shipment.shipped_at,
+        "estimated_delivery_date": shipment.estimated_delivery_date,
+    }
 
 
 def list_orders_for_customer(session: Session, customer_id: str) -> list[dict]:
