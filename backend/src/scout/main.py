@@ -11,6 +11,7 @@ from scout.api.affiliate import router as affiliate_router
 from scout.api.products import router as products_router
 from scout.api.checkout import router as checkout_router
 from scout.api.cart import router as cart_router
+from scout.api.analytics import router as analytics_router
 
 
 @asynccontextmanager
@@ -41,6 +42,7 @@ app.include_router(affiliate_router) # deterministic
 app.include_router(products_router) # deterministic 
 app.include_router(checkout_router)# deterministic 
 app.include_router(cart_router) # deterministic
+app.include_router(analytics_router) # deterministic - no AI involved
 
 STATIC_IMAGES_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "product_images"
 STATIC_IMAGES_DIR.mkdir(parents=True, exist_ok=True)
