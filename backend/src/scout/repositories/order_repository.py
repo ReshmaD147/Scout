@@ -38,19 +38,32 @@ class OrderRepository:
         return order
 
     def add_item(
-        self, order_id: str, product_id: str, quantity: int, price_at_purchase: float
+        self,
+        order_id: str,
+        product_id: str,
+        quantity: int,
+        price_at_purchase: float,
+        attribution_source: str | None = None,
+        recommendation_id: str | None = None,
     ) -> OrderItem:
         """Build a new OrderItem and stage it for saving. Does not commit.
 
         price_at_purchase is stored separately from the product's current
         price, so historical orders stay accurate even if the product's
         price changes later.
+
+        attribution_source/recommendation_id are optional, already-validated
+        sales-attribution fields (see agents/attribution.py) - simply
+        persisted here, not re-validated, since validation already
+        happened once at the actual cart-add moment.
         """
         item = OrderItem(
             order_id=order_id,
             product_id=product_id,
             quantity=quantity,
             price_at_purchase=price_at_purchase,
+            attribution_source=attribution_source,
+            recommendation_id=recommendation_id,
         )
         self.session.add(item)
         return item

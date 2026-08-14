@@ -117,6 +117,8 @@ def create_order(
             product_id=item["product_id"],
             quantity=item.get("quantity", 1),
             price_at_purchase=product.price,
+            attribution_source=item.get("attribution_source"),
+            recommendation_id=item.get("recommendation_id"),
         )
 
     session.commit()

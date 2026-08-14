@@ -17,6 +17,13 @@ class CheckoutItem(BaseModel):
     quantity: int = 1
     size: str | None = None
     color: str | None = None
+    # Carried through from the earlier /cart/add response, where these
+    # were already independently validated - checkout trusts them as-is
+    # here, since re-validating a recommendation_id against a conversation
+    # that may have ended isn't meaningful; the real validation already
+    # happened once, at the moment of the actual cart-add.
+    attribution_source: str | None = None
+    recommendation_id: str | None = None
 
 
 class CheckoutRequest(BaseModel):
@@ -52,7 +59,12 @@ def checkout(request: CheckoutRequest):
                     "error": f"Only {stock_info['total_quantity']} available for {product_label}.",
                 }
 
-            cart_items.append({"product_id": item.product_id, "quantity": item.quantity})
+            cart_items.append({
+                "product_id": item.product_id,
+                "quantity": item.quantity,
+                "attribution_source": item.attribution_source,
+                "recommendation_id": item.recommendation_id,
+            })
         order = create_order(session, customer_id=request.customer_id, cart_items=cart_items)
 
         if not order or not order.get("items"):
