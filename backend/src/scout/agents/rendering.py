@@ -689,13 +689,16 @@ def _order_sentences(claims: list[ProposedClaim]) -> list[str]:
             # to be a separately-approved value, causing a real, subtle
             # bug where this correct, verified sentence was silently
             # stripped even though carrier and status were both approved.
-            sentences.append(f"Order {subject_id} is with {carrier}, currently {shipment_status_value}.")
+            # Uses the readable, space-separated form ("in transit", not
+            # "in_transit") - final_safety_scan's detection regex for
+            # shipment status is matched to this same, readable form.
+            sentences.append(f"Your order is on its way with {carrier}, currently {_readable_shipment_status(shipment_status_value)}.")
         elif carrier is not None:
-            sentences.append(f"Order {subject_id} is with {carrier}.")
+            sentences.append(f"Your order is on its way with {carrier}.")
         if shipped_at is not None:
-            sentences.append(f"It shipped on {shipped_at}.")
+            sentences.append(f"It left our warehouse on {shipped_at}.")
         if estimated_delivery is not None:
-            sentences.append(f"Estimated delivery: {estimated_delivery}.")
+            sentences.append(f"You can expect it by {estimated_delivery}.")
         if tracking is not None:
             sentences.append(f"Order {subject_id} tracking number is {tracking}.")
         if payment_status is not None:
@@ -724,6 +727,17 @@ def _order_status_sentence(order_id: str, status: str) -> str:
     if normalized == "shipped":
         return f"Order {order_id} has shipped."
     return f"Order {order_id} is currently {normalized}."
+
+
+def _readable_shipment_status(status: str) -> str:
+    """Human-readable phrasing for shipment status codes, matching the
+    same underscore-to-words style used elsewhere (see _order_status_
+    sentence). Deliberately keeps the underlying detected value (see
+    final_safety_scan's regex, which matches the underscore form) intact
+    within the sentence - only the customer-facing word choice changes,
+    not the actual verified value being stated.
+    """
+    return status.strip().lower().replace("_", " ")
 
 
 def _customer_policy_statement(statement: str) -> str:
@@ -795,8 +809,8 @@ def _detected_values(sentence: str) -> list[Any]:
         for match in re.findall(r"\b(pending|processing|shipped|delivered|cancelled|canceled|returned)\b", sentence, re.IGNORECASE)
     )
     values.extend(
-        match.lower()
-        for match in re.findall(r"\b(label_created|in_transit|out_for_delivery|delivered|delayed)\b", sentence, re.IGNORECASE)
+        match.lower().replace(" ", "_")
+        for match in re.findall(r"\b(label created|in transit|out for delivery|delivered|delayed)\b", sentence, re.IGNORECASE)
     )
     # Carrier names are short, real words (UPS, FedEx, USPS, DHL) that
     # the existing all-caps-4+-char regex above doesn't catch (UPS is

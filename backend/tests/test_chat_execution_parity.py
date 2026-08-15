@@ -415,7 +415,7 @@ def test_authenticated_order_status_final_result_matches_streaming(monkeypatch):
     )
 
     assert "O1001" in result.reply
-    assert "in_transit" in result.reply.lower()
+    assert "in transit" in result.reply.lower()
     assert "ups" in result.reply.lower()
     assert result.products == []
 
