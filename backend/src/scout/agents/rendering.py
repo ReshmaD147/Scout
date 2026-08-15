@@ -335,14 +335,14 @@ def _external_offer_phrase(product: dict) -> str:
 def _internal_product_summary_sentences(products: list[dict]) -> list[str]:
     if len(products) == 1:
         product = products[0]
-        sentence = f"{product['name']} is a Scout option"
+        sentence = f"We have the {product['name']}"
         if "price" in product:
             sentence += f" for {_format_money(product['price'])}"
         promotion = product.get("promotion")
         if isinstance(promotion, dict) and promotion.get("discounted_price") is not None:
-            sentence += f", or {_format_money(promotion['discounted_price'])} after promotion"
+            sentence += f", on sale for {_format_money(promotion['discounted_price'])}"
         if product.get("rating") is not None:
-            sentence += f", with a {product['rating']} rating"
+            sentence += f", rated {product['rating']}"
         return [sentence + "."]
 
     priced = [product for product in products if "price" in product]

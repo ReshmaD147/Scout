@@ -193,7 +193,7 @@ def test_direct_recommendation_with_successful_tool_evidence_returns_verified_pr
     history = []
     reply, products = asyncio.run(_run_single_intent(App(), history, "Recommend a dress under $80.", debug=False))
 
-    assert reply == "Dress is a Scout option for $79.99."
+    assert reply == "We have the Dress for $79.99."
     assert products == [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]
     assert history[-1]["content"] == reply
 

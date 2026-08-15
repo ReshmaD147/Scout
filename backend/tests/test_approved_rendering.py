@@ -274,7 +274,7 @@ def test_product_recommendation_wording_is_customer_friendly_and_approved_only()
         customer_message="Recommend a dress under $80",
     )
 
-    assert reply == "Wrap Dress is a Scout option for $68.00, or $57.80 after promotion, with a 4.4 rating."
+    assert reply == "We have the Wrap Dress for $68.00, on sale for $57.80, rated 4.4."
     assert "$12" not in reply
     assert "same-day" not in reply
     assert rendered == [
@@ -771,7 +771,7 @@ def test_sentence_with_approved_and_rejected_facts_is_rebuilt_from_claims():
         customer_message="dress",
     )
 
-    assert reply == "Dress is a Scout option for $79.99."
+    assert reply == "We have the Dress for $79.99."
     assert "today" not in reply
     assert rendered == [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]
 
@@ -822,7 +822,7 @@ def test_non_streaming_integration_stores_safe_reply_and_preserves_api_schema():
     history = []
     reply, products = asyncio.run(_run_single_intent(FakeApp(), history, "dress", debug=False))
 
-    assert reply == "Dress is a Scout option for $79.99."
+    assert reply == "We have the Dress for $79.99."
     assert products == [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]
     assert history[-1] == {"role": "assistant", "content": reply}
     ChatResponse(session_id="s1", reply=reply, products=products)
@@ -850,7 +850,7 @@ def test_streaming_integration_preserves_sse_shape_and_cleanup():
     events = asyncio.run(_collect_async(_run_single_intent_streaming(FakeStreamingApp(), history, "dress")))
 
     assert [event[0] for event in events] == ["progress", "progress", "progress", "result"]
-    assert events[-1] == ("result", ("Dress is a Scout option for $79.99.", [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]))
+    assert events[-1] == ("result", ("We have the Dress for $79.99.", [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]))
     assert history[-1] == {"role": "assistant", "content": events[-1][1][0]}
     assert get_evidence_entries() == []
 
@@ -875,7 +875,7 @@ def test_existing_correction_output_cannot_bypass_rendering():
 
     reply, products = asyncio.run(_run_single_intent(FakeApp(), [], "dress", debug=False))
 
-    assert reply == "Dress is a Scout option for $79.99."
+    assert reply == "We have the Dress for $79.99."
     assert products == [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]
 
 

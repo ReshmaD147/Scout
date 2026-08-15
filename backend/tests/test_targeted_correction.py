@@ -505,7 +505,7 @@ def test_direct_targeted_correction_invokes_only_selected_specialist_and_sanitiz
     assert other.calls == 0
     assert "recommend_agent" in app.scout_specialists
     assert [tool.name for tool in specialist.tools] == ["search"]
-    assert corrected.reply == "Dress is a Scout option for $79.99."
+    assert corrected.reply == "We have the Dress for $79.99."
     assert corrected.products == [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]
     assert "magic" not in corrected.reply
     assert [record.attempt_number for record in records] == [0, 1]
@@ -611,7 +611,7 @@ def test_non_streaming_integration_uses_targeted_correction_and_stores_safe_repl
     app = App()
     reply, products = asyncio.run(_run_single_intent(app, history, "dress", debug=False))
 
-    assert reply == "Dress is a Scout option for $79.99."
+    assert reply == "We have the Dress for $79.99."
     assert products == [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]
     assert history == [{"role": "user", "content": "dress"}, {"role": "assistant", "content": reply}]
     assert app.calls == 1
@@ -655,8 +655,8 @@ def test_streaming_integration_uses_same_helper_and_preserves_sse_shape():
     events = asyncio.run(_collect_async(_run_single_intent_streaming(App(), history, "dress")))
 
     assert [event[0] for event in events] == ["progress", "progress", "progress", "result"]
-    assert events[-1] == ("result", ("Dress is a Scout option for $79.99.", [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]))
-    assert history[-1] == {"role": "assistant", "content": "Dress is a Scout option for $79.99."}
+    assert events[-1] == ("result", ("We have the Dress for $79.99.", [{"product_id": "P001", "name": "Dress", "source": "internal", "price": 79.99}]))
+    assert history[-1] == {"role": "assistant", "content": "We have the Dress for $79.99."}
 
 
 def test_multi_intent_correction_isolated_and_merge_deterministic(monkeypatch):
