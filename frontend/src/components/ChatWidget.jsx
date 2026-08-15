@@ -7,7 +7,6 @@ import {
   getImagePresentation,
   getPromotionPresentation,
 } from "./ProductCard.helpers";
-import { buildInventoryQuickActions } from "./ChatWidget.helpers";
 import ReactMarkdown from "react-markdown";
 import "./ChatWidget.css";
 
@@ -264,12 +263,12 @@ function refinementPrompts(products) {
 
   const names = products.map((product) => String(product.name || "").toLowerCase()).join(" ");
   if (names.includes("dress")) {
-    return ["Check store availability", "Black dresses"];
+    return ["Black dresses"];
   }
   if (names.includes("shoe") || names.includes("boot") || names.includes("sneaker")) {
-    return ["Waterproof options", "Check store availability"];
+    return ["Waterproof options"];
   }
-  return ["Check store availability", "Similar styles"];
+  return ["Similar styles"];
 }
 
 export default function ChatWidget() {
@@ -527,10 +526,11 @@ export default function ChatWidget() {
         )}
 
         {messages.map((msg, i) => {
-          const quickActions =
-            msg.role === "assistant"
-              ? buildInventoryQuickActions(msg.content, messages.slice(0, i + 1))
-              : [];
+          // Inventory quick-action buttons (nearby stores / online
+          // delivery / find similar) intentionally removed - kept
+          // buildInventoryQuickActions itself in the helpers file in
+          // case this is revisited later, just no longer rendered here.
+          const quickActions = [];
 
           return (
             <div key={i}>
