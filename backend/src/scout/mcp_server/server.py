@@ -10,6 +10,7 @@ from scout.services.store_service import check_store_stock, get_fulfillment_opti
 from scout.services.order_service import (
     check_return_eligibility_for_customer,
     get_order_for_customer,
+    get_shipment_for_customer,
     list_orders_for_authenticated_customer,
 )
 from scout.services.ranking_service import rank_products
@@ -45,6 +46,10 @@ def _to_float(value, default: float = 0) -> float:
     except (TypeError, ValueError):
         return default
 
+## When the AI needs product information, it calls a tool.
+##This tool is normal Python code.
+##The tool reads the real data from the backend.
+##The AI does not directly access the database.
 
 @mcp.tool()
 def search(
@@ -362,6 +367,22 @@ def orders(order_id: str) -> dict:
     session = SessionLocal()
     try:
         return get_order_for_customer(session, order_id, authenticated_customer_id=_authenticated_customer_id())
+    finally:
+        session.close()
+
+
+@mcp.tool()
+def shipment_status(order_id: str) -> dict:
+    """Look up shipment/tracking details for an order — carrier, tracking
+    number, current status, shipped date, estimated delivery. Read-only —
+    does not create or update shipment records; those are managed
+    exclusively by deterministic fulfillment logic. Requires an
+    authenticated customer context and reuses the EXACT SAME ownership
+    check as `orders` above; without a trusted, authenticated identity
+    that owns this order, it fails closed identically."""
+    session = SessionLocal()
+    try:
+        return get_shipment_for_customer(session, order_id, authenticated_customer_id=_authenticated_customer_id())
     finally:
         session.close()
 
