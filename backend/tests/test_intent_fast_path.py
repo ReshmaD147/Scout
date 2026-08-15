@@ -72,10 +72,13 @@ def test_fast_path_store_availability_extracts_location():
 
 
 def test_fast_path_order_status_with_explicit_order_id():
+    # "Where is order..." is genuinely a shipping/location question - as
+    # of Phase 3 (shipment tracking), this correctly classifies as
+    # shipment_status, not plain order_status.
     intent = intent_splitter.classify_clear_single_intent("Where is order ORD-1001?")
 
     assert intent is not None
-    assert intent.request_type == "order_status"
+    assert intent.request_type == "shipment_status"
     assert intent.order_id == "ORD-1001"
 
 

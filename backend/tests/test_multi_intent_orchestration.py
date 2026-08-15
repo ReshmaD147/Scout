@@ -102,6 +102,17 @@ def _tool_result(tool_name, args):
         ]
     if tool_name == "orders":
         return {"order_id": args["order_id"], "status": "shipped", "found": True}
+    if tool_name == "shipment_status":
+        return {
+            "order_id": args["order_id"],
+            "found": True,
+            "authorized": True,
+            "shipped": True,
+            "carrier": "UPS",
+            "tracking_number": "1Z999AA10123456784",
+            "status": "in_transit",
+            "estimated_delivery_date": "2026-08-16",
+        }
     if tool_name == "return_eligibility":
         return {"order_id": args["order_id"], "likely_eligible": True, "reason": "Within the return window."}
     if tool_name == "search_external_offers":
@@ -232,7 +243,21 @@ def test_mi_04_order_status_and_return_eligibility_are_read_only(monkeypatch):
 
 
 def test_order_status_question_uses_order_agent_only(monkeypatch):
+    # "Where is O1001?" specifically asks about location/shipping, so as
+    # of Phase 3 (shipment tracking), this correctly routes to the
+    # richer shipment_status tool instead of plain order status - see
+    # tool_first.py's shipping_terms check.
     result = _run_with_fake_tools(monkeypatch, "Where is O1001?")
+
+    assert result.graph_markers == []
+    assert [call[0] for call in result.calls] == ["order_agent"]
+    assert [call[1] for call in result.calls] == ["shipment_status"]
+
+
+def test_plain_order_status_question_still_uses_orders_tool(monkeypatch):
+    # A genuinely plain status question (no shipping-specific words)
+    # still correctly uses the simpler orders tool, not shipment_status.
+    result = _run_with_fake_tools(monkeypatch, "What is the status of O1001?")
 
     assert result.graph_markers == []
     assert [call[0] for call in result.calls] == ["order_agent"]

@@ -423,15 +423,19 @@ def _resolve_order_follow_up_intent(
         return "Which order ID should I check?"
 
     wants_return = any(term in normalized for term in ("return", "eligible", "eligibility", "refund", "exchange"))
-    wants_status = any(
+    # Distinguished from plain status HERE, at the moment the intent is
+    # created - so this real, semantic difference (shipping/tracking vs.
+    # generic order status) survives downstream as request_type itself,
+    # rather than needing every later consumer to re-derive it from
+    # text that may have already been rewritten into a synthetic phrase.
+    wants_shipping = any(
+        term in normalized
+        for term in ("where", "track", "tracking", "arrive", "arrival", "shipped", "shipment", "when will")
+    )
+    wants_status = wants_shipping or any(
         term in normalized
         for term in (
-            "where",
             "status",
-            "track",
-            "tracking",
-            "arrive",
-            "arrival",
             "when",
             "what did i order",
             "what's in it",
@@ -442,8 +446,17 @@ def _resolve_order_follow_up_intent(
     if not wants_return and not wants_status:
         return None
 
-    request_type = "return_eligibility" if wants_return else "order_status"
-    action = "Check return eligibility" if request_type == "return_eligibility" else "Check order status"
+    if wants_return:
+        request_type = "return_eligibility"
+    elif wants_shipping:
+        request_type = "shipment_status"
+    else:
+        request_type = "order_status"
+    action = {
+        "return_eligibility": "Check return eligibility",
+        "shipment_status": "Check shipment status",
+        "order_status": "Check order status",
+    }[request_type]
     structured = StructuredIntent(
         text=f"{action} for order {active_order_id}.",
         request_type=request_type,

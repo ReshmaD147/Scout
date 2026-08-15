@@ -260,6 +260,7 @@ DIRECT_ROUTE_SPECIALISTS = {
     "inventory_availability": "inventory_agent",
     "store_availability": "inventory_agent",
     "order_status": "order_agent",
+    "shipment_status": "order_agent",
     "return_eligibility": "order_agent",
     "policy_question": "policy_agent",
     "external_offer": "external_offer_agent",

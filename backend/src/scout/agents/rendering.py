@@ -678,8 +678,26 @@ def _order_sentences(claims: list[ProposedClaim]) -> list[str]:
         tracking = _claim_value(subject_claims, ClaimType.ORDER_TRACKING, "tracking_number")
         payment_status = _claim_value(subject_claims, ClaimType.PAYMENT_STATUS, "payment_status")
         return_eligible = _claim_value(subject_claims, ClaimType.RETURN_ELIGIBILITY, "return_eligible")
+        carrier = _claim_value(subject_claims, ClaimType.SHIPMENT_STATUS, "carrier")
+        shipment_status_value = _claim_value(subject_claims, ClaimType.SHIPMENT_STATUS, "shipment_status")
+        shipped_at = _claim_value(subject_claims, ClaimType.SHIPMENT_STATUS, "shipped_at")
+        estimated_delivery = _claim_value(subject_claims, ClaimType.SHIPMENT_STATUS, "estimated_delivery_date")
         if status is not None:
             sentences.append(_order_status_sentence(subject_id, str(status)))
+        if carrier is not None and shipment_status_value is not None:
+            # Deliberately avoid the word "shipped" here - it collides
+            # with final_safety_scan's pre-existing order-status
+            # detection regex, which would then require "shipped" itself
+            # to be a separately-approved value, causing a real, subtle
+            # bug where this correct, verified sentence was silently
+            # stripped even though carrier and status were both approved.
+            sentences.append(f"Order {subject_id} is with {carrier}, currently {shipment_status_value}.")
+        elif carrier is not None:
+            sentences.append(f"Order {subject_id} is with {carrier}.")
+        if shipped_at is not None:
+            sentences.append(f"It shipped on {shipped_at}.")
+        if estimated_delivery is not None:
+            sentences.append(f"Estimated delivery: {estimated_delivery}.")
         if tracking is not None:
             sentences.append(f"Order {subject_id} tracking number is {tracking}.")
         if payment_status is not None:
@@ -778,6 +796,17 @@ def _detected_values(sentence: str) -> list[Any]:
         match.lower()
         for match in re.findall(r"\b(pending|processing|shipped|delivered|cancelled|canceled|returned)\b", sentence, re.IGNORECASE)
     )
+    values.extend(
+        match.lower()
+        for match in re.findall(r"\b(label_created|in_transit|out_for_delivery|delivered|delayed)\b", sentence, re.IGNORECASE)
+    )
+    # Carrier names are short, real words (UPS, FedEx, USPS, DHL) that
+    # the existing all-caps-4+-char regex above doesn't catch (UPS is
+    # only 3 characters) - confirmed via a real bug: this sentence was
+    # being silently stripped by final_safety_scan because "UPS" was
+    # never detected as a value at all, so it could never be found in
+    # the approved set.
+    values.extend(re.findall(r"\b(UPS|FedEx|USPS|DHL)\b", sentence, re.IGNORECASE))
     values.extend(
         match.lower()
         for match in re.findall(r"\b(today|tomorrow|[0-9]+-[0-9]+ business days)\b", sentence, re.IGNORECASE)

@@ -234,6 +234,17 @@ def _tool_result(tool_name, args):
             "status": "shipped",
             "items": [{"product_id": "P005", "name": "Running Shoes", "quantity": 1}],
         }
+    if tool_name == "shipment_status":
+        return {
+            "found": True,
+            "authorized": True,
+            "order_id": args["order_id"],
+            "shipped": True,
+            "carrier": "UPS",
+            "tracking_number": "1Z999AA10123456784",
+            "status": "in_transit",
+            "estimated_delivery_date": "2026-08-16",
+        }
     if tool_name == "return_eligibility":
         return {
             "authorized": True,
@@ -404,7 +415,8 @@ def test_authenticated_order_status_final_result_matches_streaming(monkeypatch):
     )
 
     assert "O1001" in result.reply
-    assert "shipped" in result.reply.lower()
+    assert "in_transit" in result.reply.lower()
+    assert "ups" in result.reply.lower()
     assert result.products == []
 
 

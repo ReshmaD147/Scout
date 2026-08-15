@@ -15,6 +15,7 @@ EXPECTED_TOOL_NAMES = {
     "return_eligibility",
     "orders",
     "retrieve_policy_chunks",
+    "shipment_status",
 }
 
 FORBIDDEN_TOOL_NAMES = {

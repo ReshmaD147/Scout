@@ -312,6 +312,10 @@ FACT_KEYS = {
     "found",
     "status",
     "tracking_number",
+    "shipped",
+    "carrier",
+    "shipped_at",
+    "estimated_delivery_date",
     "payment_status",
     "return_eligible",
     "likely_eligible",
@@ -1203,6 +1207,8 @@ def _classify_guard_denial(error_message: str) -> str:
 # ─────────────────────────────────────────────────────────
 # PUBLIC ENTRY POINT — called by tool_guard.py for every tool call
 # ─────────────────────────────────────────────────────────
+## When a tool returns information, Scout saves that result as evidence.
+## This evidence shows what the backend actually returned
 
 def record_tool_call(
     *,

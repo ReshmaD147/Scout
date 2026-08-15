@@ -872,7 +872,10 @@ def test_order_arrival_followup_uses_active_order_id(monkeypatch):
 
     assert app.graph_calls == 0
     assert app.scout_specialists["order_agent"].calls == 0
-    assert captured == {"tool_name": "orders", "args": {"order_id": "O1001"}, "agent_name": "order_agent"}
+    # "When will it arrive?" is genuinely an arrival/shipping question -
+    # as of Phase 3 (shipment tracking), this correctly calls the richer
+    # shipment_status tool instead of plain order status.
+    assert captured == {"tool_name": "shipment_status", "args": {"order_id": "O1001"}, "agent_name": "order_agent"}
 
 
 def test_order_items_followup_uses_active_order_id(monkeypatch):
@@ -891,6 +894,8 @@ def test_order_items_followup_uses_active_order_id(monkeypatch):
 
     assert app.graph_calls == 0
     assert app.scout_specialists["order_agent"].calls == 0
+    # "What did I order?" asks about order CONTENTS, not shipping status -
+    # correctly still uses the plain orders tool, not shipment_status.
     assert captured == {"tool_name": "orders", "args": {"order_id": "O1001"}, "agent_name": "order_agent"}
 
 

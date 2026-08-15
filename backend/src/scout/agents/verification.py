@@ -46,6 +46,7 @@ SUPPORTED_FIELDS = {
     ClaimType.FULFILLMENT_ESTIMATE.value: {"pickup_estimate", "delivery_estimate"},
     ClaimType.ORDER_STATUS.value: {"status"},
     ClaimType.ORDER_TRACKING.value: {"tracking_number"},
+    ClaimType.SHIPMENT_STATUS.value: {"carrier", "shipment_status", "shipped_at", "estimated_delivery_date"},
     ClaimType.PAYMENT_STATUS.value: {"payment_status"},
     ClaimType.RETURN_ELIGIBILITY.value: {"return_eligible"},
     ClaimType.POLICY_STATEMENT.value: {"statement", "policy_name", "policy_version", "source_document", "source_section"},
@@ -72,6 +73,7 @@ DOMAIN_AGENTS = {
     ClaimType.FULFILLMENT_ESTIMATE.value: {"inventory_agent"},
     ClaimType.ORDER_STATUS.value: {"order_agent"},
     ClaimType.ORDER_TRACKING.value: {"order_agent"},
+    ClaimType.SHIPMENT_STATUS.value: {"order_agent"},
     ClaimType.PAYMENT_STATUS.value: {"order_agent"},
     ClaimType.RETURN_ELIGIBILITY.value: {"order_agent"},
     ClaimType.POLICY_STATEMENT.value: {"policy_agent"},
@@ -350,6 +352,20 @@ def _candidate_values(claim: ProposedClaim, facts: dict[str, Any]) -> list[Any]:
     if claim.claim_type == ClaimType.ORDER_TRACKING.value:
         value = facts.get("tracking_number")
         return [value] if value else []
+    if claim.claim_type == ClaimType.SHIPMENT_STATUS.value:
+        # Multiple fields share this one claim type (carrier,
+        # shipment_status, shipped_at, estimated_delivery_date) - the
+        # claim's own .field tells us which specific value to check,
+        # same pattern as FULFILLMENT_ESTIMATE above.
+        if claim.field == "shipment_status":
+            # facts uses "status" (matching the real Shipment model's
+            # field name); the claim itself uses "shipment_status" as
+            # its field name to avoid colliding with ORDER_STATUS's
+            # own "status" field, which means something different.
+            value = facts.get("status")
+        else:
+            value = facts.get(claim.field)
+        return [value] if value is not None else []
     if claim.claim_type == ClaimType.PAYMENT_STATUS.value:
         return [facts["payment_status"]] if "payment_status" in facts else []
     if claim.claim_type == ClaimType.RETURN_ELIGIBILITY.value:
@@ -379,6 +395,17 @@ def _candidate_values(claim: ProposedClaim, facts: dict[str, Any]) -> list[Any]:
         return facts.get("attributes", []) if isinstance(facts.get("attributes"), list) else []
     if claim.claim_type == ClaimType.EXTERNAL_OFFER_AVAILABILITY.value:
         return [facts["availability"]] if facts.get("external_product_id") and "availability" in facts else []
+    if claim.claim_type == ClaimType.SHIPMENT_STATUS.value:
+        # Deliberately simple, normalized-string matching for all four
+        # fields (carrier, shipment_status, shipped_at,
+        # estimated_delivery_date) - genuinely different vocabulary
+        # from ORDER_STATUS's canonical status words, so reusing
+        # _canonical_status here would be incorrect. Dates are plain
+        # strings in the current Shipment model (e.g. "2026-08-12"),
+        # not parsed/compared as real dates - exact string match is
+        # correct as long as both sides use the same format, which is
+        # the current, honest state of this data model.
+        return _normalize_string(claim.value) == _normalize_string(evidence_value)
     if claim.claim_type == ClaimType.ACCESS_DENIED.value:
         return [facts["message"]] if facts.get("found") is False and "message" in facts else []
     return []
@@ -423,6 +450,17 @@ def _values_match(claim: ProposedClaim, evidence_value: Any) -> bool:
         return isinstance(claim.value, bool) and claim.value is evidence_value
     if claim.claim_type == ClaimType.ORDER_STATUS.value:
         return _canonical_status(claim.value) is not None and _canonical_status(claim.value) == _canonical_status(evidence_value)
+    if claim.claim_type == ClaimType.SHIPMENT_STATUS.value:
+        # Deliberately simple, normalized-string matching for all four
+        # fields (carrier, shipment_status, shipped_at,
+        # estimated_delivery_date) - genuinely different vocabulary
+        # from ORDER_STATUS's canonical status words, so reusing
+        # _canonical_status here would be incorrect. Dates are plain
+        # strings in the current Shipment model (e.g. "2026-08-12"),
+        # not parsed/compared as real dates - exact string match is
+        # correct as long as both sides use the same format, which is
+        # the current, honest state of this data model.
+        return _normalize_string(claim.value) == _normalize_string(evidence_value)
     if claim.claim_type == ClaimType.ACCESS_DENIED.value:
         # Exact-string match only, deliberately — this is a real,
         # tool-provided denial message (e.g. "Sign in to view order

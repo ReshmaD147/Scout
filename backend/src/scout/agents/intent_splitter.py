@@ -179,7 +179,14 @@ def classify_clear_single_intent(message: str) -> StructuredIntent | None:
             order_id=order_id,
             confidence=0.95,
         )
-    if order_id and _contains_any(normalized, {"where", "status", "track", "tracking", "order"}):
+    if order_id and _contains_any(normalized, {"where", "track", "tracking", "shipped", "shipment", "arrive", "arrival"}):
+        return StructuredIntent(
+            text=original,
+            request_type="shipment_status",
+            order_id=order_id,
+            confidence=0.95,
+        )
+    if order_id and _contains_any(normalized, {"status", "order"}):
         return StructuredIntent(
             text=original,
             request_type="order_status",

@@ -90,6 +90,14 @@ async def _run_tool_first_if_possible(
 
 def _tool_first_call(structured_intent: StructuredIntent, agent_name: str) -> tuple[str | None, dict]:
     if agent_name == "order_agent":
+        # shipment_status vs order_status is decided ONCE, at the point
+        # the StructuredIntent is created (see
+        # _resolve_order_follow_up_intent and the deterministic intent
+        # classifier) - request_type itself already carries the correct
+        # meaning here, so this is a simple, direct mapping with no
+        # keyword-guessing needed.
+        if structured_intent.request_type == "shipment_status" and structured_intent.order_id:
+            return "shipment_status", {"order_id": structured_intent.order_id}
         if structured_intent.request_type == "order_status" and structured_intent.order_id:
             return "orders", {"order_id": structured_intent.order_id}
         if structured_intent.request_type == "return_eligibility" and structured_intent.order_id:
@@ -148,7 +156,7 @@ async def _execute_read_only_tool(tool_name: str, args: dict, *, agent_name: str
         "inventory_agent": {"stock", "stores", "fulfillment_options"},
         "external_offer_agent": {"search_external_offers"},
         "recommend_agent": {"recommend_products", "alternatives"},
-        "order_agent": {"orders", "return_eligibility"},
+        "order_agent": {"orders", "return_eligibility", "shipment_status"},
         "policy_agent": {"retrieve_policy_chunks"},
     }
     if tool_name not in allowed.get(agent_name, set()):

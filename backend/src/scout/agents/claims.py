@@ -32,6 +32,7 @@ class ClaimType(StrEnum):
     EXTERNAL_OFFER_ATTRIBUTE = "external_offer_attribute"
     EXTERNAL_OFFER_AVAILABILITY = "external_offer_availability"
     ACCESS_DENIED = "access_denied"
+    SHIPMENT_STATUS = "shipment_status"
 
 
 CANONICAL_AGENT_NAMES = {
@@ -50,6 +51,10 @@ RETURN_WINDOW_PATTERN = re.compile(r"\b(\d+)\s*days?\b", re.IGNORECASE)
 TRACKING_PATTERN = re.compile(r"\b(?:tracking|tracking number)\s*(?:is|#|:)?\s*([A-Z0-9][A-Z0-9-]{5,})\b", re.IGNORECASE)
 ORDER_STATUSES = {"pending", "processing", "shipped", "delivered", "cancelled", "canceled", "returned"}
 
+##Scout then creates small claims from the evidence.
+##For example:
+##‘This dress costs $68.’
+##Each claim represents one fact that can be checked.
 
 def propose_claims(
     *,
@@ -279,7 +284,16 @@ def _add_evidence_claims(builder: _ClaimBuilder, entry: EvidenceEntry) -> None:
             if facts.get(estimate_key) is not None:
                 builder.add(claim_type=ClaimType.FULFILLMENT_ESTIMATE, subject_id=inventory_subject_id or subject_id, field=estimate_key, value=facts[estimate_key], evidence_ids=evidence_ids, source_agent=agent)
 
-        if facts.get("order_id") and facts.get("status") is not None:
+        # "shipped" key presence distinguishes shipment_status tool
+        # evidence from orders tool evidence - both can have a "status"
+        # field, but they mean genuinely different things (order
+        # lifecycle status vs. shipment/tracking status), and must not
+        # collide into the same ORDER_STATUS claim. Confirmed via a
+        # real bug: shipment evidence was being silently captured here
+        # first, before the dedicated SHIPMENT_STATUS logic below ever
+        # ran, since both facts dicts happen to have "order_id" and
+        # "status".
+        if facts.get("order_id") and facts.get("status") is not None and "shipped" not in facts:
             builder.add(claim_type=ClaimType.ORDER_STATUS, subject_id=facts["order_id"], field="status", value=facts["status"], evidence_ids=evidence_ids, source_agent=agent)
         elif facts.get("found") is False and facts.get("message") is not None:
             # Genuine access-denial case (e.g. orders() returning
@@ -296,6 +310,21 @@ def _add_evidence_claims(builder: _ClaimBuilder, entry: EvidenceEntry) -> None:
             builder.add(claim_type=ClaimType.ACCESS_DENIED, subject_id=subject_id or facts.get("order_id"), field="message", value=facts["message"], evidence_ids=evidence_ids, source_agent=agent)
         if facts.get("tracking_number") is not None:
             builder.add(claim_type=ClaimType.ORDER_TRACKING, subject_id=subject_id, field="tracking_number", value=facts["tracking_number"], evidence_ids=evidence_ids, source_agent=agent)
+        if facts.get("shipped") and facts.get("carrier") is not None:
+            # Shipment facts, from the shipment_status tool - a separate
+            # claim type from ORDER_STATUS/ORDER_TRACKING, since this is
+            # a genuinely different shape of fact (carrier, shipment
+            # status, dates) even though tracking_number itself is
+            # already correctly handled by the existing, reusable
+            # ORDER_TRACKING claim above - no need to duplicate that
+            # one field under a new claim type.
+            builder.add(claim_type=ClaimType.SHIPMENT_STATUS, subject_id=subject_id or facts.get("order_id"), field="carrier", value=facts["carrier"], evidence_ids=evidence_ids, source_agent=agent)
+            if facts.get("status") is not None:
+                builder.add(claim_type=ClaimType.SHIPMENT_STATUS, subject_id=subject_id or facts.get("order_id"), field="shipment_status", value=facts["status"], evidence_ids=evidence_ids, source_agent=agent)
+            if facts.get("shipped_at") is not None:
+                builder.add(claim_type=ClaimType.SHIPMENT_STATUS, subject_id=subject_id or facts.get("order_id"), field="shipped_at", value=facts["shipped_at"], evidence_ids=evidence_ids, source_agent=agent)
+            if facts.get("estimated_delivery_date") is not None:
+                builder.add(claim_type=ClaimType.SHIPMENT_STATUS, subject_id=subject_id or facts.get("order_id"), field="estimated_delivery_date", value=facts["estimated_delivery_date"], evidence_ids=evidence_ids, source_agent=agent)
         if facts.get("payment_status") is not None:
             builder.add(claim_type=ClaimType.PAYMENT_STATUS, subject_id=subject_id, field="payment_status", value=facts["payment_status"], evidence_ids=evidence_ids, source_agent=agent)
         for return_key in ("return_eligible", "likely_eligible", "eligible"):
