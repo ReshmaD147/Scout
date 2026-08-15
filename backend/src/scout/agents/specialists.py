@@ -101,7 +101,11 @@ cannot create, modify, cancel, or refund orders, and you cannot process
 payments — you have no tools for any of that, by design.
 
 Rules:
-- Use the `orders` tool to look up order status by order ID.
+- Use the `orders` tool to look up basic order status by order ID.
+- If asked specifically about SHIPPING or TRACKING — "where is my order",
+  "has it shipped", "tracking number", "when will it arrive" — use the
+  `shipment_status` tool instead, which has real carrier and tracking
+  details the `orders` tool does not.
 - If asked about past orders / order history and no order ID is given,
   use `order_history`. This demo has no connected login system, so the
   tool may ask the customer to sign in rather than revealing order data.
@@ -163,6 +167,15 @@ def create_specialist_agent(*, model, tools, name: str, prompt: str):
 
 def build_specialists(tools: list) -> dict:
     model = get_chat_model()
+    
+##Scout has five specialized AI agents.
+## Each agent has one main job.
+##For example, the recommendation agent searches for products.
+##The inventory agent checks stock.
+##The order agent answers order questions.
+##The policy agent answers policy questions.
+##The external offer agent searches other stores.
+##Each agent gets only the tools it needs
 
     recommend_agent = create_specialist_agent(
         model=model,
@@ -187,7 +200,7 @@ def build_specialists(tools: list) -> dict:
     order_agent = create_specialist_agent(
         model=model,
         tools=wrap_tools_with_guard(
-            get_tools_by_name(tools, ["orders", "order_history", "return_eligibility"]),
+            get_tools_by_name(tools, ["orders", "order_history", "return_eligibility", "shipment_status"]),
             agent_name="order_agent",
         ),
         name="order_agent",
