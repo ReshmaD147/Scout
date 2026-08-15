@@ -539,7 +539,8 @@ def test_return_policy_is_summarized_for_customer_without_source_dump():
 
     assert reply == (
         "Opened or worn items usually aren’t eligible for a return unless they’re defective. "
-        "Scout accepts returns within 30 days when items are unworn, unwashed, and still have original tags."
+        "Returns are accepted within 30 days as long as the item is unworn, unwashed, and still has its original tags. "
+        "Want me to check if a specific order qualifies?"
     )
     assert "Policy source" not in reply
     assert "returns.md" not in reply
@@ -566,8 +567,8 @@ def test_refund_policy_is_summarized_for_customer_without_source_dump():
     )
 
     assert reply == (
-        "Refunds usually take 5-7 business days after Scout receives and inspects the return. "
-        "Store credit is faster, usually within 1 business day."
+        "Refunds usually take 5-7 business days after we receive and inspect the return. "
+        "Store credit is typically faster, usually within 1 business day."
     )
     assert "Policy source" not in reply
     assert "refunds.md" not in reply

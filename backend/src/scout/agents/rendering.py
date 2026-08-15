@@ -743,17 +743,21 @@ def _readable_shipment_status(status: str) -> str:
 
 
 def _customer_policy_statement(statement: str) -> str:
+    # Structure: direct answer -> relevant detail -> optional next step.
+    # Verification/retrieval mechanics stay entirely internal - the
+    # customer just gets a clear, natural answer to their real question.
     cleaned = _clean_policy_statement(statement)
     lowered = cleaned.lower()
     if "opened or worn items are not eligible" in lowered:
         sentence = "Opened or worn items usually aren’t eligible for a return unless they’re defective."
         if "30 days" in lowered and "unworn" in lowered and "unwashed" in lowered and "original tags" in lowered:
-            sentence += " Scout accepts returns within 30 days when items are unworn, unwashed, and still have original tags."
+            sentence += " Returns are accepted within 30 days as long as the item is unworn, unwashed, and still has its original tags."
+        sentence += " Want me to check if a specific order qualifies?"
         return sentence
     if "5-7 business days" in lowered and "store credit" in lowered:
         return (
-            "Refunds usually take 5-7 business days after Scout receives and inspects the return. "
-            "Store credit is faster, usually within 1 business day."
+            "Refunds usually take 5-7 business days after we receive and inspect the return. "
+            "Store credit is typically faster, usually within 1 business day."
         )
     return cleaned
 
