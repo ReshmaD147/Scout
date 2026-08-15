@@ -300,22 +300,29 @@ def _product_sentences(products: list[dict]) -> list[str]:
 
 
 def _external_product_summary_sentences(products: list[dict]) -> list[str]:
+    # Deliberately keeps these facts clearly framed as OTHER retailers'
+    # offers, never blended with Scout's own catalog - the customer
+    # should never mistake this for something Scout sells or fulfills.
+    # No changes to verification/affiliate logic here, purely wording.
+    # Structure: state we don't have it -> present the alternative in
+    # the SAME sentence (avoids "here's what I found... another option"
+    # redundancy) -> explicit safety boundary (other retailer, price/
+    # availability may change, purchase happens with them, our return
+    # policy doesn't apply).
     count = len(products)
-    intro = "Scout does not currently have a matching internal option I can verify."
     if count == 1:
-        summary = f"I found a third-party option: {_external_offer_phrase(products[0])}."
-    else:
-        summary = f"I found {count} third-party options: {_join_phrases([_external_offer_phrase(product) for product in products])}."
-    limitation = (
-        "These outside offers can’t be added to the Scout cart, Scout’s return policy doesn’t apply, "
-        "and I don’t have verified return-policy information for those retailers."
-        if count > 1
-        else (
-            "This outside offer can’t be added to the Scout cart, Scout’s return policy doesn’t apply, "
-            "and I don’t have verified return-policy information for that retailer."
+        summary = f"We don’t have a matching item in our own catalog right now, but I found another option: {_external_offer_phrase(products[0])}."
+        limitation = (
+            "It’s from another retailer, so price and availability may change. "
+            "You’ll complete the purchase with that retailer, and Scout’s return policy won’t apply."
         )
-    )
-    return [intro, summary, limitation]
+    else:
+        summary = f"We don’t have a matching item in our own catalog right now, but I found a few options elsewhere: {_join_phrases([_external_offer_phrase(product) for product in products])}."
+        limitation = (
+            "These are from other retailers, so prices and availability may change. "
+            "You’ll complete the purchase with those retailers, and Scout’s return policy won’t apply."
+        )
+    return [summary, limitation]
 
 
 def _external_offer_phrase(product: dict) -> str:

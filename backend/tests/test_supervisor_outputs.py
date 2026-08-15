@@ -98,10 +98,10 @@ def test_external_handoff_excludes_stale_internal_products():
     )
 
     assert reply == (
-        "Scout does not currently have a matching internal option I can verify. "
-        "I found a third-party option: External Match from Partner Shop for $35.98. "
-        "This outside offer can’t be added to the Scout cart, Scout’s return policy doesn’t apply, "
-        "and I don’t have verified return-policy information for that retailer."
+        "We don’t have a matching item in our own catalog right now, but I found another option: "
+        "External Match from Partner Shop for $35.98. "
+        "It’s from another retailer, so price and availability may change. "
+        "You’ll complete the purchase with that retailer, and Scout’s return policy won’t apply."
     )
     assert products == [external_product]
 

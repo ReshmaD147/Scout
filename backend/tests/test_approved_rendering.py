@@ -602,14 +602,13 @@ def test_external_offer_is_labeled_and_never_returned_as_scout_inventory():
     )
 
     assert reply == (
-        "Scout does not currently have a matching internal option I can verify. "
-        "I found a third-party option: Market Dress from Partner for $70.00. "
-        "This outside offer can’t be added to the Scout cart, Scout’s return policy doesn’t apply, "
-        "and I don’t have verified return-policy information for that retailer."
+        "We don’t have a matching item in our own catalog right now, but I found another option: "
+        "Market Dress from Partner for $70.00. "
+        "It’s from another retailer, so price and availability may change. "
+        "You’ll complete the purchase with that retailer, and Scout’s return policy won’t apply."
     )
     assert rendered == [{key: value for key, value in products[0].items() if key != "image_url"}]
     assert rendered[0]["source"] == "external"
-    assert "can’t be added to the Scout cart" in reply
 
 
 def test_multiple_external_offers_are_summarized_once_and_match_rendered_cards(monkeypatch, tmp_path):
@@ -648,13 +647,13 @@ def test_multiple_external_offers_are_summarized_once_and_match_rendered_cards(m
     )
 
     assert reply == (
-        "Scout does not currently have a matching internal option I can verify. "
-        "I found 2 third-party options: Ruched Midi Dress from Nordstrom Rack for $29.96 "
+        "We don’t have a matching item in our own catalog right now, but I found a few options elsewhere: "
+        "Ruched Midi Dress from Nordstrom Rack for $29.96 "
         "and Enid Satin Body-Con Evening Dress from Nordstrom Rack for $35.98. "
-        "These outside offers can’t be added to the Scout cart, Scout’s return policy doesn’t apply, "
-        "and I don’t have verified return-policy information for those retailers."
+        "These are from other retailers, so prices and availability may change. "
+        "You’ll complete the purchase with those retailers, and Scout’s return policy won’t apply."
     )
-    assert reply.count("Scout cart") == 1
+    assert reply.count("other retailers") == 1
     assert reply.count("return policy") == 1
     assert "Unapproved Dress" not in reply
     assert [product["external_product_id"] for product in rendered] == ["EX001", "EX011"]
