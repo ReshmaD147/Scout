@@ -392,11 +392,11 @@ def test_inventory_and_fulfillment_render_independent_approved_facts_and_omit_co
         customer_message="is it available",
     )
 
-    assert "Verified quantity for the requested product is 3." in reply
-    assert "the requested product is in stock." in reply
+    assert "We have 3 in stock for the requested product." in reply
+    assert "That item is currently in stock." in reply
     assert "Pickup is available for the requested product." in reply
     assert "Delivery is not available for the requested product." in reply
-    assert "That store is 4.2 miles away." in reply
+    assert "That store is about 4.2 miles away." in reply
     assert "today" not in reply
     assert "P002" not in reply
 

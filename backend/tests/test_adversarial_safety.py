@@ -152,7 +152,7 @@ def test_inventory_fulfillment_cross_subject_and_estimate_attacks_fail_safely():
     assert "today" not in reply
     assert "Pickup is available" not in reply
     assert "Delivery is available" not in reply
-    assert "That store is 4.2 miles away." in reply
+    assert "That store is about 4.2 miles away." in reply
     assert "P001" not in reply
     assert any(rejected.claim_id == "cl_dist_bad" and rejected.reason_code == RejectionCode.VALUE_MISMATCH for rejected in verification.rejected_claims)
 

@@ -515,22 +515,20 @@ def _inventory_sentences(claims: list[ProposedClaim], customer_message: str = ""
                         sentence = f"{sentence} {_variant_unavailable_next_actions_sentence()}"
                 sentences.append(sentence)
                 continue
-        if record["raw_store_name"] is not None:
-            sentences.append(f"{record['raw_store_name']} is a verified store.")
         if record["distance"] is not None:
-            sentences.append(f"{label} is {record['distance']} miles away.")
+            sentences.append(f"{label} is about {record['distance']} miles away.")
         if record["quantity"] is not None:
-            sentences.append(f"Verified quantity for {_neutral_product_reference(record['product_name'])} is {record['quantity']}.")
+            sentences.append(f"We have {record['quantity']} in stock for {_neutral_product_reference(record['product_name'])}.")
         if record["in_stock"] is not None:
-            sentences.append(f"{_neutral_product_reference(record['product_name'])} is {'in stock' if record['in_stock'] else 'out of stock'}.")
+            sentences.append(f"That item is currently {'in stock' if record['in_stock'] else 'out of stock'}." if record['product_name'] is None else f"{record['product_name']} is currently {'in stock' if record['in_stock'] else 'out of stock'}.")
         if record["pickup"] is not None:
             sentences.append(f"Pickup is {'available' if record['pickup'] else 'not available'} for {_neutral_product_reference(record['product_name'])}.")
         if record["delivery"] is not None:
             sentences.append(f"Delivery is {'available' if record['delivery'] else 'not available'} for {_neutral_product_reference(record['product_name'])}.")
         if record["pickup_estimate"] is not None:
-            sentences.append(f"Pickup estimate for {_neutral_product_reference(record['product_name'])} is {record['pickup_estimate']}.")
+            sentences.append(f"You can expect pickup for {_neutral_product_reference(record['product_name'])} in about {record['pickup_estimate']}.")
         if record["delivery_estimate"] is not None:
-            sentences.append(f"Delivery estimate for {_neutral_product_reference(record['product_name'])} is {record['delivery_estimate']}.")
+            sentences.append(f"Delivery for {_neutral_product_reference(record['product_name'])} takes about {record['delivery_estimate']}.")
     return sentences
 
 
