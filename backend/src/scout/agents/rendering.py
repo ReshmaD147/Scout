@@ -692,19 +692,21 @@ def _order_sentences(claims: list[ProposedClaim]) -> list[str]:
             # Uses the readable, space-separated form ("in transit", not
             # "in_transit") - final_safety_scan's detection regex for
             # shipment status is matched to this same, readable form.
-            sentences.append(f"Your order is on its way with {carrier}, currently {_readable_shipment_status(shipment_status_value)}.")
+            # Deliberately keeps the order ID visible - a customer with
+            # multiple orders needs to know which one this reply is about.
+            sentences.append(f"Order {subject_id} is on its way with {carrier}, currently {_readable_shipment_status(shipment_status_value)}.")
         elif carrier is not None:
-            sentences.append(f"Your order is on its way with {carrier}.")
+            sentences.append(f"Order {subject_id} is on its way with {carrier}.")
         if shipped_at is not None:
             sentences.append(f"It left our warehouse on {shipped_at}.")
         if estimated_delivery is not None:
             sentences.append(f"You can expect it by {estimated_delivery}.")
         if tracking is not None:
-            sentences.append(f"Order {subject_id} tracking number is {tracking}.")
+            sentences.append(f"Your tracking number is {tracking}.")
         if payment_status is not None:
-            sentences.append(f"Order {subject_id} payment status is {payment_status}.")
+            sentences.append(f"Payment for order {subject_id} is {payment_status}.")
         if return_eligible is not None:
-            sentences.append(f"It is {'eligible' if return_eligible else 'not eligible'} for return.")
+            sentences.append(f"It looks like this order is {'eligible' if return_eligible else 'not eligible'} for a return.")
     return sentences
 
 

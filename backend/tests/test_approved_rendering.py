@@ -486,8 +486,8 @@ def test_orders_render_specific_approved_claims_without_payment_method_details()
 
     assert "Order O1001 has shipped." in reply
     assert "TRK123456" in reply
-    assert "payment status is paid" in reply
-    assert "eligible for return" in reply
+    assert "Payment for order O1001 is paid." in reply
+    assert "eligible for a return" in reply
     assert "4242" not in reply
     assert "O2002" not in reply
 
