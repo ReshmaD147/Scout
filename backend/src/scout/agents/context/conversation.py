@@ -18,6 +18,7 @@ CONTEXT_KEYS = {
     "requested_budget_max",
     "pending_intent",
     "pending_missing_fields",
+    "last_out_of_stock_product_id",
 }
 
 
@@ -94,6 +95,25 @@ def _update_context_from_verified_turn(
             context["active_product_name"] = products[0].get("name")
         context["pending_intent"] = None
         context["pending_missing_fields"] = []
+
+    # Track a genuine, recent out-of-stock fact - this is the real gate
+    # that _out_of_stock_recovery_action (recovery_router.py) should be
+    # checked against, rather than pattern-matching keywords like
+    # "today" or "store" against ANY message regardless of context.
+    # Confirmed via a real bug: without this gate, "What is the weather
+    # today?" was misclassified as a store-availability recovery
+    # follow-up purely because it contained the word "today".
+    out_of_stock_claims = [
+        claim for claim in approved_claims
+        if claim.claim_type == ClaimType.INVENTORY_AVAILABILITY.value and claim.value is False
+    ]
+    if out_of_stock_claims:
+        context["last_out_of_stock_product_id"] = out_of_stock_claims[0].subject_id
+    elif products or (structured_intent and structured_intent.request_type not in {None, "inventory_availability", "store_availability"}):
+        # A genuinely new turn about something else clears this stale
+        # flag, so it can't linger and incorrectly gate future messages
+        # indefinitely.
+        context["last_out_of_stock_product_id"] = None
 
     product_names = {
         claim.subject_id: claim.value

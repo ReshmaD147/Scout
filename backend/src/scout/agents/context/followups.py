@@ -298,7 +298,14 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
         return order_follow_up
     is_follow_up = bool(FOLLOW_UP_PRODUCT_RE.search(normalized))
     wants_similar_products = _is_scout_similar_products_request(normalized)
-    recovery_action = _out_of_stock_recovery_action(normalized)
+    # Only even consult the recovery-action keyword matcher when there's
+    # genuine, recent out-of-stock context to recover from - otherwise
+    # its broad keyword regexes (e.g. "today" matching RECOVERY_URGENCY_RE)
+    # can misfire on completely unrelated messages. Confirmed via a real
+    # bug: "What is the weather today?" was misclassified as a
+    # store-availability recovery request purely because it contains
+    # the word "today", with zero actual out-of-stock context.
+    recovery_action = _out_of_stock_recovery_action(normalized) if context.get("last_out_of_stock_product_id") else None
     if base_intent is None and not is_follow_up and not wants_similar_products and recovery_action is None:
         return None
 

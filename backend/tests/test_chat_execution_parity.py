@@ -330,6 +330,11 @@ def _variant_context(product_id="P001"):
         "requested_size": "M",
         "active_category": "dresses",
         "budget_max": 80,
+        # Represents the genuine out-of-stock scenario this fixture is
+        # meant to simulate - required for recovery-action follow-ups
+        # (delivery/pickup/store questions) to be recognized correctly,
+        # per the context-gating fix.
+        "last_out_of_stock_product_id": product_id,
         "active_selected_products": [
             {
                 "product_id": product_id,

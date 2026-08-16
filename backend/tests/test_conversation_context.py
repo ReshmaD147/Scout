@@ -240,6 +240,7 @@ def test_can_it_be_delivered_routes_to_delivery_check(monkeypatch):
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     captured = {}
 
@@ -272,6 +273,7 @@ def test_delivery_recovery_paraphrases_route_to_delivery_only(monkeypatch):
             "requested_size": "M",
             "requested_color": "black",
             "requested_budget_max": 80,
+            "last_out_of_stock_product_id": "P001",
         }
         captured = {}
 
@@ -303,6 +305,7 @@ def test_today_recovery_without_location_asks_for_location(monkeypatch):
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
 
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
@@ -326,6 +329,7 @@ def test_urgency_paraphrase_without_location_asks_for_location(monkeypatch):
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
 
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
@@ -350,6 +354,7 @@ def test_today_recovery_with_store_preserves_exact_variant(monkeypatch):
         "requested_color": "black",
         "requested_store": "Maple Grove",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     calls = []
 
@@ -385,6 +390,7 @@ def test_no_drive_recovery_chooses_delivery_not_nearby(monkeypatch):
         "requested_color": "black",
         "requested_store": "Maple Grove",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     captured = {}
 
@@ -417,6 +423,7 @@ def test_travel_avoidance_paraphrase_skips_nearby_and_chooses_delivery(monkeypat
         "requested_color": "black",
         "requested_store": "Maple Grove",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     captured = {}
 
@@ -448,6 +455,7 @@ def test_any_way_to_get_it_chooses_single_delivery_check(monkeypatch):
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     calls = []
 
@@ -482,6 +490,7 @@ def test_any_way_to_get_it_with_known_store_chooses_pickup_check(monkeypatch):
         "requested_color": "black",
         "requested_store": "Maple Grove",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     calls = []
 
@@ -516,6 +525,7 @@ def test_check_another_store_without_location_asks_for_location(monkeypatch):
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
 
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
@@ -540,6 +550,7 @@ def test_location_paraphrases_without_location_ask_for_location(monkeypatch):
             "requested_size": "M",
             "requested_color": "black",
             "requested_budget_max": 80,
+            "last_out_of_stock_product_id": "P001",
         }
 
         monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
@@ -564,6 +575,7 @@ def test_check_another_store_with_known_store_preserves_exact_variant(monkeypatc
         "requested_color": "black",
         "requested_store": "Maple Grove",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     calls = []
 
@@ -598,6 +610,7 @@ def test_find_similar_followup_preserves_category_variant_and_budget(monkeypatch
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     captured = {}
 
@@ -643,6 +656,7 @@ def test_show_me_something_similar_routes_to_alternatives(monkeypatch):
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
     captured = {}
 
@@ -682,6 +696,7 @@ def test_similar_product_paraphrases_route_to_alternatives(monkeypatch):
             "requested_size": "M",
             "requested_color": "black",
             "requested_budget_max": 80,
+            "last_out_of_stock_product_id": "P001",
         }
         captured = {}
 
@@ -720,6 +735,7 @@ def test_find_similar_black_medium_no_scout_results_returns_clear_message(monkey
         "requested_size": "M",
         "requested_color": "black",
         "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
     }
 
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
