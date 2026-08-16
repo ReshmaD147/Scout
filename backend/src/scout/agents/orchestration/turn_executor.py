@@ -29,6 +29,7 @@ from scout.agents.execution.model_runtime import (
     _invoke_agent_with_timing,
     _invoke_graph_with_timing,
 )
+from langgraph.errors import GraphRecursionError
 from scout.agents.intent_splitter import StructuredIntent
 from scout.agents.result_normalization import (
     evidence_entries_from_tool_messages,
@@ -322,19 +323,36 @@ async def execute_single_intent_turn(
                 diagnostics.record("direct_routing", 0, direct_route_used=False, supervisor_invoked=True)
             if stream_progress:
                 final_turn = None
-                async for kind, payload in _run_supervisor_turn_streaming(app, history, messages_before):
-                    if kind == "progress":
-                        yield ("progress", payload)
-                    else:
-                        final_turn = payload
+                try:
+                    async for kind, payload in _run_supervisor_turn_streaming(app, history, messages_before):
+                        if kind == "progress":
+                            yield ("progress", payload)
+                        else:
+                            final_turn = payload
+                except GraphRecursionError:
+                    # Same real, occasionally-triggered loop as the
+                    # non-streaming path below - a genuinely ambiguous
+                    # message can send the model into an unproductive
+                    # handoff loop. Fail safely rather than crash.
+                    yield ("result", ("I'm having trouble following that — could you rephrase or ask something more specific?", []))
+                    return
                 if final_turn is None:
                     yield ("result", ("Something went wrong processing that — could you try again?", []))
                     return
                 new_messages, had_external_handoff = final_turn
             else:
                 graph_input = {"messages": _trim_history_for_model(history)}
-                with timed_stage("supervisor_graph_invocation"):
-                    result = await _invoke_graph_with_timing(app, graph_input, config={"recursion_limit": 15})
+                try:
+                    with timed_stage("supervisor_graph_invocation"):
+                        result = await _invoke_graph_with_timing(app, graph_input, config={"recursion_limit": 15})
+                except GraphRecursionError:
+                    # A genuinely ambiguous message (e.g. a bare "yes"
+                    # with no pending question) can occasionally send
+                    # the model into a real, unproductive handoff loop -
+                    # confirmed via live testing. Fail safely with an
+                    # honest message rather than a raw 500 error.
+                    yield ("result", ("I'm having trouble following that — could you rephrase or ask something more specific?", []))
+                    return
                 if result is None:
                     yield ("result", ("Something went wrong processing that — could you try again?", []))
                     return
