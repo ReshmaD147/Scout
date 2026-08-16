@@ -317,7 +317,7 @@ def test_multi_product_recommendation_uses_natural_summary_without_repetition():
     )
 
     assert reply == (
-        "I found 3 Scout dresses: Wrap Dress for $68.00, Slip Dress for $62.50, "
+        "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, "
         "and Black Midi Dress for $79.99. Sale prices are shown on the cards."
     )
     assert "Scout option" not in reply
@@ -605,7 +605,7 @@ def test_external_offer_is_labeled_and_never_returned_as_scout_inventory():
         "We don’t have a matching item in our own catalog right now, but I found another option: "
         "Market Dress from Partner for $70.00. "
         "It’s from another retailer, so price and availability may change. "
-        "You’ll complete the purchase with that retailer, and Scout’s return policy won’t apply."
+        "You’ll complete the purchase with that retailer, and our return policy won’t apply."
     )
     assert rendered == [{key: value for key, value in products[0].items() if key != "image_url"}]
     assert rendered[0]["source"] == "external"
@@ -651,7 +651,7 @@ def test_multiple_external_offers_are_summarized_once_and_match_rendered_cards(m
         "Ruched Midi Dress from Nordstrom Rack for $29.96 "
         "and Enid Satin Body-Con Evening Dress from Nordstrom Rack for $35.98. "
         "These are from other retailers, so prices and availability may change. "
-        "You’ll complete the purchase with those retailers, and Scout’s return policy won’t apply."
+        "You’ll complete the purchase with those retailers, and our return policy won’t apply."
     )
     assert reply.count("other retailers") == 1
     assert reply.count("return policy") == 1

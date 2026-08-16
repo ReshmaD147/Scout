@@ -301,8 +301,8 @@ def _product_sentences(products: list[dict]) -> list[str]:
 
 def _external_product_summary_sentences(products: list[dict]) -> list[str]:
     # Deliberately keeps these facts clearly framed as OTHER retailers'
-    # offers, never blended with Scout's own catalog - the customer
-    # should never mistake this for something Scout sells or fulfills.
+    # offers, never blended with our own catalog - the customer
+    # should never mistake this for something we sell or fulfill.
     # No changes to verification/affiliate logic here, purely wording.
     # Structure: state we don't have it -> present the alternative in
     # the SAME sentence (avoids "here's what I found... another option"
@@ -314,13 +314,13 @@ def _external_product_summary_sentences(products: list[dict]) -> list[str]:
         summary = f"We don’t have a matching item in our own catalog right now, but I found another option: {_external_offer_phrase(products[0])}."
         limitation = (
             "It’s from another retailer, so price and availability may change. "
-            "You’ll complete the purchase with that retailer, and Scout’s return policy won’t apply."
+            "You’ll complete the purchase with that retailer, and our return policy won’t apply."
         )
     else:
         summary = f"We don’t have a matching item in our own catalog right now, but I found a few options elsewhere: {_join_phrases([_external_offer_phrase(product) for product in products])}."
         limitation = (
             "These are from other retailers, so prices and availability may change. "
-            "You’ll complete the purchase with those retailers, and Scout’s return policy won’t apply."
+            "You’ll complete the purchase with those retailers, and our return policy won’t apply."
         )
     return [summary, limitation]
 
@@ -349,12 +349,12 @@ def _internal_product_summary_sentences(products: list[dict]) -> list[str]:
     if len(priced) == len(products):
         return [_product_list_summary(products)]
 
-    return [f"Here are {len(products)} verified Scout options: {_product_name_list(products)}."]
+    return [f"Here are {len(products)} verified options from our catalog: {_product_name_list(products)}."]
 
 
 def _product_list_summary(products: list[dict]) -> str:
     category = _summary_product_category(products)
-    phrase = f"I found {len(products)} Scout {category}: "
+    phrase = f"I found {len(products)} {category} in our catalog: "
     phrase += _join_phrases([f"{product['name']} for {_format_money(product['price'])}" for product in products])
     if all(isinstance(product.get("promotion"), dict) and product["promotion"].get("discounted_price") is not None for product in products):
         phrase += ". Sale prices are shown on the cards"

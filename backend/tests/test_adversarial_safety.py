@@ -266,7 +266,11 @@ def test_external_offer_cannot_merge_with_internal_or_scout_inventory():
     # and Scout's own return policy/cart do not apply to it - the exact
     # phrasing may evolve independently of this boundary check.
     assert "another retailer" in reply.lower() or "other retailer" in reply.lower()
-    assert "scout" in reply.lower() and "return policy" in reply.lower()
+    # Behavior check: our own return policy explicitly doesn't apply -
+    # deliberately generic wording ("our return policy"), not the
+    # storefront brand name, so this stays correct even if the brand
+    # is renamed later.
+    assert "return policy" in reply.lower() and "won’t apply" in reply.lower()
     assert products == [
         {
             "external_product_id": "EX001",

@@ -172,7 +172,7 @@ def test_mi_01_recommendation_transfers_product_ids_to_store_inventory(monkeypat
     assert [call[1] for call in result.calls] == ["recommend_products", "stores", "stores"]
     assert result.calls[1][2]["product_id"] == "P001"
     assert result.calls[1][2]["store_name"] == "Maple Grove"
-    assert "I found 2 Scout dresses" in result.reply
+    assert "I found 2 dresses in our catalog" in result.reply
     assert "Black Midi Dress for $79.99" in result.reply
     assert "Maple Grove store with 2 units" in result.reply
     assert [product["product_id"] for product in result.products] == ["P001", "P003"]

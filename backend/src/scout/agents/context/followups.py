@@ -269,8 +269,25 @@ def _resolve_recommendation_selection(message: str, context: dict) -> SplitInten
     if any(term in normalized for term in exclusion_terms):
         return None
 
-    product = _resolve_context_product(message, context)
-    if product is None or product == "ambiguous":
+    # Deliberately does NOT use the shared _resolve_context_product's
+    # active_product_id fallback here - that fallback is correct for
+    # genuine follow-ups ("is it available"), but WRONG for this
+    # function's purpose: matching an EXPLICIT name/ordinal reference
+    # among several shown products. Confirmed via a real bug: "do you
+    # have any shoes?" was incorrectly resolving to a stale
+    # active_product_id from an earlier turn, with zero actual
+    # relevance check against the message.
+    explicit_matches = [
+        item for item in selected
+        if item.get("name") and _normalize_context_text(item["name"]) in _normalize_context_text(message)
+    ]
+    if len(explicit_matches) == 1:
+        product = explicit_matches[0]
+    elif len(explicit_matches) > 1:
+        return None
+    else:
+        product = _resolve_ordinal_reference(message, selected)
+    if product is None:
         return None
 
     structured = StructuredIntent(

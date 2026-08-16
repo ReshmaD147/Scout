@@ -350,7 +350,7 @@ def _variant_context(product_id="P001"):
 def test_product_recommendation_final_result_matches_streaming(monkeypatch):
     result = _assert_ask_streaming_parity(monkeypatch, "Recommend a dress under $80")
 
-    assert "Scout dresses" in result.reply
+    assert "dresses in our catalog" in result.reply
     assert [product["product_id"] for product in result.products] == ["P003", "P004", "P001"]
     assert result.progress_events
 
