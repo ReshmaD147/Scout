@@ -429,6 +429,29 @@
   font-size: 9px;
 }
 
+.chat-widget-product-add-btn {
+  margin-top: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--color-primary-light);
+  border-radius: var(--radius-sm, 6px);
+  background: transparent;
+  color: var(--color-primary-light);
+  font-size: 11px;
+  font-weight: var(--font-weight-bold);
+  cursor: pointer;
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.chat-widget-product-add-btn:hover:not(:disabled) {
+  background: var(--color-primary-light);
+  color: var(--color-surface, #fff);
+}
+
+.chat-widget-product-add-btn:disabled {
+  opacity: 0.7;
+  cursor: default;
+}
+
 .chat-widget-refine {
   margin: 8px 0 12px;
   padding: 10px 12px;

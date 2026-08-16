@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { sendChatFeedback, streamChatMessage } from "../api/client";
 import { useChatWidget } from "../context/ChatWidgetContext";
+import { useCart } from "../context/CartContext";
 import {
   formatCurrency,
   getImagePresentation,
@@ -134,9 +135,28 @@ function ChatProductRail({ products, onInternalProductClick }) {
 
 function ChatProductCard({ product, onInternalProductClick }) {
   const [imageFailed, setImageFailed] = useState(false);
+  const [addState, setAddState] = useState("idle"); // idle | adding | added
+  const { addToCart } = useCart();
   const imagePresentation = getImagePresentation(product, imageFailed);
   const promotionPresentation = getPromotionPresentation(product);
   const isExternal = product.source === "external";
+
+  const handleAddToCart = async (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (addState !== "idle") return;
+    setAddState("adding");
+    try {
+      await addToCart(product, 1, {
+        recommendation_id: product.recommendation_id,
+      });
+      setAddState("added");
+      setTimeout(() => setAddState("idle"), 2000);
+    } catch (e) {
+      console.warn("Failed to add to cart from chat:", e);
+      setAddState("idle");
+    }
+  };
   const destination = isExternal
     ? resolveExternalUrl(product.click_url)
     : `/product/${product.product_id}`;
@@ -180,6 +200,16 @@ function ChatProductCard({ product, onInternalProductClick }) {
           {isExternal ? `View at ${product.vendor_name}` : "View details"}
         </span>
         {isExternal && <span className="chat-widget-product-affiliate">Affiliate link</span>}
+        {!isExternal && (
+          <button
+            type="button"
+            className="chat-widget-product-add-btn"
+            onClick={handleAddToCart}
+            disabled={addState !== "idle"}
+          >
+            {addState === "adding" ? "Adding…" : addState === "added" ? "Added ✓" : "Add to Cart"}
+          </button>
+        )}
       </div>
     </>
   );
