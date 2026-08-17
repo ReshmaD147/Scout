@@ -1,0 +1,117 @@
+[
+  {
+    "id": "STATE-01",
+    "description": "Recommendation -> ordinal selection -> inventory clarification -> cart confirmation",
+    "turns": [
+      {
+        "query": "Recommend a dress under $80",
+        "expect_products": true
+      },
+      {
+        "query": "I like the second one",
+        "must_contain_any": ["add", "cart"]
+      },
+      {
+        "query": "wait, is it available in medium first?",
+        "must_contain_any": ["medium", "available", "stock"]
+      },
+      {
+        "query": "yes",
+        "must_contain_any": ["added", "cart", "done"]
+      }
+    ]
+  },
+  {
+    "id": "STATE-02",
+    "description": "Out-of-stock reply -> unrelated topic -> stale recovery must not hijack routing",
+    "turns": [
+      {
+        "query": "Is the black midi dress in a medium?",
+        "must_contain_any": ["out of stock", "medium"]
+      },
+      {
+        "query": "What is the weather today?",
+        "must_not_contain": ["zip code", "which store"]
+      }
+    ]
+  },
+  {
+    "id": "STATE-03",
+    "description": "Cart offer -> clarification about same product -> offer remains valid",
+    "turns": [
+      {
+        "query": "Recommend a dress under $80",
+        "expect_products": true
+      },
+      {
+        "query": "I like the second one",
+        "must_contain_any": ["add", "cart"]
+      },
+      {
+        "query": "is it available in medium?",
+        "must_not_contain": ["couldn't verify"]
+      },
+      {
+        "query": "yes",
+        "must_contain_any": ["added", "cart", "done"]
+      }
+    ]
+  },
+  {
+    "id": "STATE-04",
+    "description": "Cart offer -> genuine topic switch -> stale offer clears (does not silently confirm on an unrelated later message)",
+    "turns": [
+      {
+        "query": "Recommend a dress under $80",
+        "expect_products": true
+      },
+      {
+        "query": "I like the second one",
+        "must_contain_any": ["add", "cart"]
+      },
+      {
+        "query": "Actually, do you have any shoes?",
+        "expect_products": true,
+        "must_not_contain": ["want me to add the"]
+      }
+    ]
+  },
+  {
+    "id": "STATE-05",
+    "description": "Recommendation refinement preserves selected product/context",
+    "turns": [
+      {
+        "query": "Recommend a dress under $80",
+        "expect_products": true
+      },
+      {
+        "query": "Show me black ones",
+        "must_contain_any": ["black", "dress"]
+      }
+    ]
+  },
+  {
+    "id": "STATE-06",
+    "description": "Topic switch between specialists does not leak stale context",
+    "turns": [
+      {
+        "query": "Is the black midi dress in a medium?",
+        "must_contain_any": ["out of stock", "medium"]
+      },
+      {
+        "query": "What is your return policy?",
+        "must_not_contain": ["black midi", "medium"]
+      }
+    ]
+  },
+  {
+    "id": "STATE-07",
+    "description": "Ambiguous 'yes' only acts when a valid pending action exists",
+    "turns": [
+      {
+        "query": "yes",
+        "must_not_contain": ["added", "to your cart"]
+      }
+    ]
+  }
+]

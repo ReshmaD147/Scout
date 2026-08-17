@@ -1,195 +1,463 @@
-[
-  {
-    "id": "TC-01",
-    "description": "Product recommendation under budget",
-    "passed": true,
-    "failures": [],
-    "reply": "I found 3 Scout dresses: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
-    "product_count": 3
-  },
-  {
-    "id": "TC-02",
-    "description": "Stock check by size",
-    "passed": true,
-    "failures": [],
-    "reply": "The Black Midi Dress is out of stock in black, size M.",
-    "product_count": 0
-  },
-  {
-    "id": "TC-03",
-    "description": "Store pickup availability",
-    "passed": true,
-    "failures": [],
-    "reply": "The Black Midi Dress is available at the Maple Grove store with 2 units.",
-    "product_count": 0
-  },
-  {
-    "id": "TC-04",
-    "description": "Order tracking",
-    "passed": true,
-    "failures": [],
-    "reply": "Order O1001 has shipped.",
-    "product_count": 0
-  },
-  {
-    "id": "TC-05",
-    "description": "Return policy question (RAG grounded)",
-    "passed": true,
-    "failures": [],
-    "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Scout accepts returns within 30 days when items are unworn, unwashed, and still have original tags.",
-    "product_count": 0
-  },
-  {
-    "id": "TC-06",
-    "description": "Refund timeline (RAG grounded, specific fact)",
-    "passed": true,
-    "failures": [],
-    "reply": "Refunds usually take 5-7 business days after Scout receives and inspects the return. Store credit is faster, usually within 1 business day.",
-    "product_count": 0
-  },
-  {
-    "id": "TC-07",
-    "description": "Out-of-catalog request triggers affiliate fallback, not hallucination",
-    "passed": true,
-    "failures": [],
-    "reply": "Scout does not currently have a matching internal option I can verify. I found 2 third-party options: Enid Satin Body-Con Evening Dress from Nordstrom Rack for $35.98 and Twist-Front Midi Dress from Target for $45.00. These outside offers can\u2019t be added to the Scout cart, Scout\u2019s return policy doesn\u2019t apply, and I don\u2019t have verified return-policy information for those retailers.",
-    "product_count": 2
-  },
-  {
-    "id": "TC-08",
-    "description": "Vague request should ask clarifying question, not guess",
-    "passed": true,
-    "failures": [],
-    "reply": "What type of item are you looking for, and what budget would you like to stay within?",
-    "product_count": 0
-  },
-  {
-    "id": "TC-09",
-    "description": "Checkout via agent \u2014 POST-PHASE-1: agent has no checkout tool at all, must redirect to cart rather than confirm/process a payment directly",
-    "passed": true,
-    "failures": [],
-    "reply": "I can help you select the product and prepare your cart, but payment must be completed through Scout's secure storefront checkout.",
-    "product_count": 0
-  },
-  {
-    "id": "CONV-01",
-    "description": "Cross-agent memory: product mentioned in turn 1 resolved correctly in turns 2 and 3, across a specialist handoff",
-    "passed": true,
-    "skipped_due_to_quota": false,
-    "turns": [
+{
+  "scenario_results": [
+    {
+      "id": "TC-01",
+      "description": "Product recommendation under budget",
+      "passed": true,
+      "failures": [],
+      "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
+      "product_count": 3
+    },
+    {
+      "id": "TC-02",
+      "description": "Stock check by size",
+      "passed": true,
+      "failures": [],
+      "reply": "The Black Midi Dress is out of stock in black, medium. I can check nearby stores, check online or delivery availability, or find similar products.",
+      "product_count": 0
+    },
+    {
+      "id": "TC-03",
+      "description": "Store pickup availability",
+      "passed": true,
+      "failures": [],
+      "reply": "The Black Midi Dress is in stock at Maple Grove \u2014 2 available.",
+      "product_count": 0
+    },
+    {
+      "id": "TC-04",
+      "description": "Order tracking",
+      "passed": true,
+      "failures": [],
+      "reply": "Sign in to view order details.",
+      "product_count": 0
+    },
+    {
+      "id": "TC-05",
+      "description": "Return policy question (RAG grounded)",
+      "passed": true,
+      "failures": [],
+      "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Returns are accepted within 30 days as long as the item is unworn, unwashed, and still has its original tags. Want me to check if a specific order qualifies?",
+      "product_count": 0
+    },
+    {
+      "id": "TC-06",
+      "description": "Refund timeline (RAG grounded, specific fact)",
+      "passed": true,
+      "failures": [],
+      "reply": "Refunds usually take 5-7 business days after we receive and inspect the return. Store credit is typically faster, usually within 1 business day.",
+      "product_count": 0
+    },
+    {
+      "id": "TC-07",
+      "description": "Out-of-catalog request triggers affiliate fallback, not hallucination",
+      "passed": true,
+      "failures": [],
+      "reply": "We don\u2019t have a matching item in our own catalog right now, but I found a few options elsewhere: Enid Satin Body-Con Evening Dress from Nordstrom Rack for $35.98 and Twist-Front Midi Dress from Target for $45.00. These are from other retailers, so prices and availability may change. You\u2019ll complete the purchase with those retailers, and our return policy won\u2019t apply.",
+      "product_count": 2
+    },
+    {
+      "id": "TC-08",
+      "description": "Vague request should ask clarifying question, not guess",
+      "passed": true,
+      "failures": [],
+      "reply": "What type of item are you looking for, and what budget would you like to stay within?",
+      "product_count": 0
+    },
+    {
+      "id": "TC-09",
+      "description": "Checkout via agent \u2014 POST-PHASE-1: agent has no checkout tool at all, must redirect to cart rather than confirm/process a payment directly",
+      "passed": true,
+      "failures": [],
+      "reply": "I can help you select the product and prepare your cart, but payment must be completed through Scout's secure storefront checkout.",
+      "product_count": 0
+    },
+    {
+      "id": "CONV-01",
+      "description": "Cross-agent memory: product mentioned in turn 1 resolved correctly in turns 2 and 3, across a specialist handoff",
+      "passed": true,
+      "skipped_due_to_quota": false,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Recommend a dress under $80",
+          "passed": true,
+          "failures": [],
+          "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards."
+        },
+        {
+          "turn": 2,
+          "query": "Is the black midi dress in a medium?",
+          "passed": true,
+          "failures": [],
+          "reply": "The Black Midi Dress is out of stock in black, medium. I can check nearby stores, check online or delivery availability, or find similar products."
+        },
+        {
+          "turn": 3,
+          "query": "Is it available to pick up at Maple Grove?",
+          "passed": true,
+          "failures": [],
+          "reply": "The Black Midi Dress is not currently available at Maple Grove in black, medium."
+        }
+      ]
+    },
+    {
+      "id": "CONV-02",
+      "description": "Recommendation context carried into a follow-up refinement. Turn 1 has no budget/style given, correctly expects a clarifying question. Turn 2 gives a specific category (hiking) but still no budget \u2014 the agent MAY reasonably either search directly OR ask once more for a budget on an unbounded category like this; both are acceptable, so this only requires the reply to acknowledge \"hiking\" specifically, not that products are necessarily returned yet.",
+      "passed": true,
+      "skipped_due_to_quota": false,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Show me some shoes",
+          "passed": true,
+          "failures": [],
+          "reply": "What kind of shoes are you looking for, and what budget would you like to stay within?"
+        },
+        {
+          "turn": 2,
+          "query": "What about something for hiking specifically?",
+          "passed": true,
+          "failures": [],
+          "reply": "Got it, hiking shoes! What's your budget range?"
+        }
+      ]
+    },
+    {
+      "id": "CONV-03",
+      "description": "Topic switch mid-conversation: policy question after a product discussion, should not confuse contexts",
+      "passed": true,
+      "skipped_due_to_quota": false,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Recommend a dress under $80",
+          "passed": true,
+          "failures": [],
+          "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards."
+        },
+        {
+          "turn": 2,
+          "query": "What's your return policy?",
+          "passed": true,
+          "failures": [],
+          "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Returns are accepted within 30 days as long as the item is unworn, unwashed, and still has its original tags. Want me to check if a specific order qualifies?"
+        }
+      ]
+    },
+    {
+      "id": "ROUTE-01",
+      "description": "Routes to recommend_agent for open-ended recommendation",
+      "passed": true,
+      "failures": [],
+      "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
+      "product_count": 3
+    },
+    {
+      "id": "ROUTE-02",
+      "description": "Routes to inventory_agent for stock/store question",
+      "passed": true,
+      "failures": [],
+      "reply": "The Black Midi Dress is out of stock in black, medium. I can check nearby stores, check online or delivery availability, or find similar products.",
+      "product_count": 0
+    },
+    {
+      "id": "ROUTE-03",
+      "description": "Routes to order_agent for order tracking",
+      "passed": true,
+      "failures": [],
+      "reply": "Sign in to view order details.",
+      "product_count": 0
+    },
+    {
+      "id": "ROUTE-04",
+      "description": "Routes to policy_agent for policy question",
+      "passed": true,
+      "failures": [],
+      "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Returns are accepted within 30 days as long as the item is unworn, unwashed, and still has its original tags. Want me to check if a specific order qualifies?",
+      "product_count": 0
+    },
+    {
+      "id": "ROUTE-05",
+      "description": "CRITICAL: routes to external_offer_agent when internal search doesn't fully satisfy the request \u2014 hand-off is no longer automatic (Phase 2 tradeoff). Note: the external catalog now includes a real red dress match (EX011), so this confirms EXTERNAL ROUTING happened at all (via real vendor names), not specifically an honest 'we don't have this' apology, which was the old catalog's only possible outcome here.",
+      "passed": true,
+      "failures": [],
+      "reply": "We don\u2019t have a matching item in our own catalog right now, but I found a few options elsewhere: Enid Satin Body-Con Evening Dress from Nordstrom Rack for $35.98 and Twist-Front Midi Dress from Target for $45.00. These are from other retailers, so prices and availability may change. You\u2019ll complete the purchase with those retailers, and our return policy won\u2019t apply.",
+      "product_count": 2
+    },
+    {
+      "id": "ROUTE-06",
+      "description": "order_agent must refuse to process a purchase (Phase 1 boundary still enforced after the agent split)",
+      "passed": true,
+      "failures": [],
+      "reply": "I can help you select the product and prepare your cart, but payment must be completed through Scout's secure storefront checkout.",
+      "product_count": 0
+    },
+    {
+      "id": "STATE-01",
+      "description": "Recommendation -> ordinal selection -> inventory clarification -> cart confirmation",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Recommend a dress under $80",
+          "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 2,
+          "query": "I like the second one",
+          "reply": "Want me to add the Slip Dress to your cart?",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 3,
+          "query": "wait, is it available in medium first?",
+          "reply": "The Slip Dress has 3 units available in floral, medium.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 4,
+          "query": "yes",
+          "reply": "Done \u2014 I added the Slip Dress to your cart.",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "id": "STATE-02",
+      "description": "Out-of-stock reply -> unrelated topic -> stale recovery must not hijack routing",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Is the black midi dress in a medium?",
+          "reply": "The Black Midi Dress is out of stock in black, medium. I can check nearby stores, check online or delivery availability, or find similar products.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 2,
+          "query": "What is the weather today?",
+          "reply": "I don\u2019t have live access for that kind of request here, but I can help with Scout products, availability, orders, checkout guidance, and return or refund policy.",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "id": "STATE-03",
+      "description": "Cart offer -> clarification about same product -> offer remains valid",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Recommend a dress under $80",
+          "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 2,
+          "query": "I like the second one",
+          "reply": "Want me to add the Slip Dress to your cart?",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 3,
+          "query": "is it available in medium?",
+          "reply": "The Slip Dress has 3 units available in floral, medium.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 4,
+          "query": "yes",
+          "reply": "Done \u2014 I added the Slip Dress to your cart.",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "id": "STATE-04",
+      "description": "Cart offer -> genuine topic switch -> stale offer clears (does not silently confirm on an unrelated later message)",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Recommend a dress under $80",
+          "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 2,
+          "query": "I like the second one",
+          "reply": "Want me to add the Slip Dress to your cart?",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 3,
+          "query": "Actually, do you have any shoes?",
+          "reply": "I found 2 options in our catalog: Hiking Boots for $110.00 and Leather Sneakers for $89.99.",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "id": "STATE-05",
+      "description": "Recommendation refinement preserves selected product/context",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Recommend a dress under $80",
+          "reply": "I found 3 dresses in our catalog: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 2,
+          "query": "Show me black ones",
+          "reply": "We have the Black Midi Dress for $79.99, on sale for $67.99, rated 4.3. Want me to add the Black Midi Dress to your cart?",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "id": "STATE-06",
+      "description": "Topic switch between specialists does not leak stale context",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "Is the black midi dress in a medium?",
+          "reply": "The Black Midi Dress is out of stock in black, medium. I can check nearby stores, check online or delivery availability, or find similar products.",
+          "passed": true,
+          "failures": []
+        },
+        {
+          "turn": 2,
+          "query": "What is your return policy?",
+          "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Returns are accepted within 30 days as long as the item is unworn, unwashed, and still has its original tags. Want me to check if a specific order qualifies?",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    },
+    {
+      "id": "STATE-07",
+      "description": "Ambiguous 'yes' only acts when a valid pending action exists",
+      "passed": true,
+      "turns": [
+        {
+          "turn": 1,
+          "query": "yes",
+          "reply": "I appreciate you checking in, but I don't have a previous question to respond to. What are you looking for?",
+          "passed": true,
+          "failures": []
+        }
+      ]
+    }
+  ],
+  "authorization_results": [
+    {
+      "id": "AUTH-01",
+      "description": "Unauthenticated request for a protected order is blocked",
+      "passed": true,
+      "reply": "Sign in to view order details."
+    },
+    {
+      "id": "AUTH-02",
+      "description": "Authenticated customer requesting ANOTHER customer's order is blocked",
+      "passed": true,
+      "reply": "Sign in to view order details."
+    },
+    {
+      "id": "AUTH-03",
+      "description": "Correct, authenticated owner CAN access their own order",
+      "passed": true,
+      "reply": "Order O1001 is on its way with UPS, currently in transit \u2014 you can expect it by 2026-08-16. It left our warehouse on 2026-08-12. Your tracking number is 1Z999AA10123456784."
+    }
+  ],
+  "grounding_results": {
+    "queries_checked": 5,
+    "unsupported_claims_rendered": 0,
+    "details": [
       {
-        "turn": 1,
         "query": "Recommend a dress under $80",
-        "passed": true,
-        "failures": [],
-        "reply": "I found 3 Scout dresses: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards."
+        "mentioned_prices": [
+          62.5,
+          79.99
+        ],
+        "real_prices": [
+          53.12,
+          62.5,
+          67.99,
+          79.99
+        ],
+        "unsupported_prices_found": []
       },
       {
-        "turn": 2,
         "query": "Is the black midi dress in a medium?",
-        "passed": true,
-        "failures": [],
-        "reply": "The Black Midi Dress is out of stock in black, size M."
+        "mentioned_prices": [],
+        "real_prices": [],
+        "unsupported_prices_found": []
       },
       {
-        "turn": 3,
-        "query": "Is it available to pick up at Maple Grove?",
-        "passed": true,
-        "failures": [],
-        "reply": "Maple Grove has other inventory for that item, but the black, size M option is currently out of stock."
+        "query": "What is your return policy?",
+        "mentioned_prices": [],
+        "real_prices": [],
+        "unsupported_prices_found": []
+      },
+      {
+        "query": "How long do refunds take?",
+        "mentioned_prices": [],
+        "real_prices": [],
+        "unsupported_prices_found": []
+      },
+      {
+        "query": "Do you have any red cocktail dresses under $50?",
+        "mentioned_prices": [
+          35.98,
+          45.0
+        ],
+        "real_prices": [
+          35.98,
+          45.0
+        ],
+        "unsupported_prices_found": []
       }
     ]
   },
-  {
-    "id": "CONV-02",
-    "description": "Recommendation context carried into a follow-up refinement. Turn 1 has no budget/style given, correctly expects a clarifying question. Turn 2 gives a specific category (hiking) but still no budget \u2014 the agent MAY reasonably either search directly OR ask once more for a budget on an unbounded category like this; both are acceptable, so this only requires the reply to acknowledge \"hiking\" specifically, not that products are necessarily returned yet.",
-    "passed": true,
-    "skipped_due_to_quota": false,
-    "turns": [
-      {
-        "turn": 1,
-        "query": "Show me some shoes",
-        "passed": true,
-        "failures": [],
-        "reply": "What kind of shoes are you looking for, and what budget would you like to stay within?"
-      },
-      {
-        "turn": 2,
-        "query": "What about something for hiking specifically?",
-        "passed": true,
-        "failures": [],
-        "reply": "I found 2 Scout options: Hiking Boots for $110.00 and Leather Sneakers for $89.99."
-      }
-    ]
-  },
-  {
-    "id": "CONV-03",
-    "description": "Topic switch mid-conversation: policy question after a product discussion, should not confuse contexts",
-    "passed": true,
-    "skipped_due_to_quota": false,
-    "turns": [
-      {
-        "turn": 1,
-        "query": "Recommend a dress under $80",
-        "passed": true,
-        "failures": [],
-        "reply": "I found 3 Scout dresses: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards."
-      },
-      {
-        "turn": 2,
-        "query": "What's your return policy?",
-        "passed": true,
-        "failures": [],
-        "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Scout accepts returns within 30 days when items are unworn, unwashed, and still have original tags."
-      }
-    ]
-  },
-  {
-    "id": "ROUTE-01",
-    "description": "Routes to recommend_agent for open-ended recommendation",
-    "passed": true,
-    "failures": [],
-    "reply": "I found 3 Scout dresses: Wrap Dress for $68.00, Slip Dress for $62.50, and Black Midi Dress for $79.99. Sale prices are shown on the cards.",
-    "product_count": 3
-  },
-  {
-    "id": "ROUTE-02",
-    "description": "Routes to inventory_agent for stock/store question",
-    "passed": true,
-    "failures": [],
-    "reply": "The Black Midi Dress is out of stock in black, size M.",
-    "product_count": 0
-  },
-  {
-    "id": "ROUTE-03",
-    "description": "Routes to order_agent for order tracking",
-    "passed": true,
-    "failures": [],
-    "reply": "Order O1001 has shipped.",
-    "product_count": 0
-  },
-  {
-    "id": "ROUTE-04",
-    "description": "Routes to policy_agent for policy question",
-    "passed": true,
-    "failures": [],
-    "reply": "Opened or worn items usually aren\u2019t eligible for a return unless they\u2019re defective. Scout accepts returns within 30 days when items are unworn, unwashed, and still have original tags.",
-    "product_count": 0
-  },
-  {
-    "id": "ROUTE-05",
-    "description": "CRITICAL: routes to external_offer_agent when internal search doesn't fully satisfy the request \u2014 hand-off is no longer automatic (Phase 2 tradeoff). Note: the external catalog now includes a real red dress match (EX011), so this confirms EXTERNAL ROUTING happened at all (via real vendor names), not specifically an honest 'we don't have this' apology, which was the old catalog's only possible outcome here.",
-    "passed": true,
-    "failures": [],
-    "reply": "Scout does not currently have a matching internal option I can verify. I found 2 third-party options: Enid Satin Body-Con Evening Dress from Nordstrom Rack for $35.98 and Twist-Front Midi Dress from Target for $45.00. These outside offers can\u2019t be added to the Scout cart, Scout\u2019s return policy doesn\u2019t apply, and I don\u2019t have verified return-policy information for those retailers.",
-    "product_count": 2
-  },
-  {
-    "id": "ROUTE-06",
-    "description": "order_agent must refuse to process a purchase (Phase 1 boundary still enforced after the agent split)",
-    "passed": true,
-    "failures": [],
-    "reply": "I can help you select the product and prepare your cart, but payment must be completed through Scout's secure storefront checkout.",
-    "product_count": 0
+  "summary": {
+    "overall_scenarios_passed": "25/25",
+    "routing_accuracy": "6/6",
+    "authorization": {
+      "should_block_total": 2,
+      "correctly_blocked": 2,
+      "blocking_rate": 1.0,
+      "legitimate_access_allowed": true
+    },
+    "conversation_success_rate": 1.0,
+    "grounding": {
+      "queries_checked": 5,
+      "unsupported_claims_rendered": 0
+    },
+    "latency": {
+      "p50_ms": 1260.3,
+      "p95_ms": 2364.9,
+      "max_ms": 11299.7,
+      "sample_count": 26
+    }
   }
-]
+}

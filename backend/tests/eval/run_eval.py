@@ -189,6 +189,14 @@ def _asserts_available(reply: str) -> bool:
     return " is available " in reply and not _mentions_unavailable(reply)
 
 
+from eval_expansion import (
+    run_authorization_scenarios,
+    run_grounding_checks,
+    run_all_stateful_scenarios,
+    build_expanded_summary,
+)
+
+
 def main():
     test_cases = json.loads(TEST_CASES_PATH.read_text())
     conversation_test_cases = json.loads(CONVERSATION_TEST_CASES_PATH.read_text())
@@ -238,6 +246,30 @@ def main():
                 print(f"    - {f}")
         time.sleep(1)
 
+    print("\n--- Stateful multi-turn conversation scenarios ---")
+    stateful_results = run_all_stateful_scenarios()
+    for r in stateful_results:
+        print(f"Running {r['id']}: {r['description']}...")
+        status = "PASS" if r["passed"] else "FAIL"
+        print(f"  [{status}]")
+        if not r["passed"]:
+            for t in r["turns"]:
+                if not t["passed"]:
+                    print(f"    Turn {t['turn']} (\"{t['query']}\"): {t.get('failures', [t.get('reason')])}")
+
+    print("\n--- Authorization scenarios ---")
+    auth_results = run_authorization_scenarios()
+    for r in auth_results:
+        status = "PASS" if r["passed"] else "FAIL"
+        print(f"  [{status}] {r['id']}: {r['description']}")
+
+    print("\n--- Grounding / verification checks ---")
+    grounding_results = run_grounding_checks()
+    print(f"  Queries checked: {grounding_results['queries_checked']}")
+    print(f"  Unsupported claims rendered: {grounding_results['unsupported_claims_rendered']}")
+
+    results.extend(stateful_results)
+
     passed = sum(1 for r in results if r["passed"])
     total = len(results)
 
@@ -249,8 +281,25 @@ def main():
         status = "✓" if r["passed"] else "✗"
         print(f"{status} {r['id']}: {r.get('description', '')}")
 
+    summary = build_expanded_summary(
+        existing_results=[r for r in results if r not in stateful_results],
+        routing_results=[r for r in results if r["id"].startswith("ROUTE-")],
+        stateful_results=stateful_results,
+        auth_results=auth_results,
+        grounding_results=grounding_results,
+    )
+    print(f"\n{'=' * 50}")
+    print("EVALUATION SUMMARY")
+    print(f"{'=' * 50}")
+    print(json.dumps(summary, indent=2))
+
     output_path = Path(__file__).parent / "last_run_results.json"
-    output_path.write_text(json.dumps(results, indent=2))
+    output_path.write_text(json.dumps({
+        "scenario_results": results,
+        "authorization_results": auth_results,
+        "grounding_results": grounding_results,
+        "summary": summary,
+    }, indent=2))
     print(f"\nFull results saved to {output_path}")
 
     sys.exit(0 if passed == total else 1)
