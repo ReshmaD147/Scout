@@ -730,25 +730,25 @@ def _order_sentences(claims: list[ProposedClaim]) -> list[str]:
         estimated_delivery = _claim_value(subject_claims, ClaimType.SHIPMENT_STATUS, "estimated_delivery_date")
         if status is not None:
             sentences.append(_order_status_sentence(subject_id, str(status)))
-        if carrier is not None and shipment_status_value is not None:
-            # Deliberately avoid the word "shipped" here - it collides
-            # with final_safety_scan's pre-existing order-status
-            # detection regex, which would then require "shipped" itself
-            # to be a separately-approved value, causing a real, subtle
-            # bug where this correct, verified sentence was silently
-            # stripped even though carrier and status were both approved.
-            # Uses the readable, space-separated form ("in transit", not
-            # "in_transit") - final_safety_scan's detection regex for
-            # shipment status is matched to this same, readable form.
-            # Deliberately keeps the order ID visible - a customer with
-            # multiple orders needs to know which one this reply is about.
-            sentences.append(f"Order {subject_id} is on its way with {carrier}, currently {_readable_shipment_status(shipment_status_value)}.")
-        elif carrier is not None:
-            sentences.append(f"Order {subject_id} is on its way with {carrier}.")
+        # Combine shipment facts into one natural sentence rather than
+        # several short, choppy ones - per tone guidelines. Deliberately
+        # avoids the word "shipped" (collides with final_safety_scan's
+        # detection regex for a different claim type - see the earlier,
+        # more detailed note in git history), uses the readable
+        # shipment-status form ("in transit"), and keeps the order ID
+        # visible since a customer with multiple orders needs to know
+        # which one this is about.
+        if carrier is not None:
+            bits = [f"Order {subject_id} is on its way with {carrier}"]
+            if shipment_status_value is not None:
+                bits[0] += f", currently {_readable_shipment_status(shipment_status_value)}"
+            if estimated_delivery is not None:
+                bits.append(f"you can expect it by {estimated_delivery}")
+            sentences.append(" — ".join(bits) + ".")
+        elif estimated_delivery is not None:
+            sentences.append(f"You can expect order {subject_id} by {estimated_delivery}.")
         if shipped_at is not None:
             sentences.append(f"It left our warehouse on {shipped_at}.")
-        if estimated_delivery is not None:
-            sentences.append(f"You can expect it by {estimated_delivery}.")
         if tracking is not None:
             sentences.append(f"Your tracking number is {tracking}.")
         if payment_status is not None:
