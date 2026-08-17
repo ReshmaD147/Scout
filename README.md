@@ -13,7 +13,9 @@ The guiding rule is simple: **anything that can cost money or trust stays determ
 - **Evidence-backed output:** tool calls produce structured evidence; proposed claims are verified before customer-visible factual replies and product cards are rebuilt from approved claims.
 - **Safe commerce boundary:** no checkout, payment, refund, cancellation, SQL, shell, or unrestricted HTTP tool is exposed to specialists. Checkout remains a deterministic REST route.
 - **Local demo mode:** `ENABLE_STRIPE_MCP=false MODEL_PROVIDER=ollama` starts the app without Stripe MCP discovery while preserving deterministic Stripe REST checkout code.
-- **Validated baseline:** 411 deterministic backend tests pass, frontend lint/build pass, and the polished demo flows cover recommendations, inventory, orders, policy, external offers, payment boundaries, and out-of-scope handling.
+- **Recommendation-driven revenue tracking:** every recommendation is tagged with a verified `recommendation_id`, carried through cart and checkout, so completed sales can be independently attributed back to Scout — see the internal `/admin/impact` dashboard.
+- **Shipment tracking:** authenticated customers can ask about live carrier, status, and estimated delivery for their own orders, with the same read-only-tool and evidence/claims/verification boundary as everything else.
+- **Validated baseline:** 412 deterministic backend tests pass, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Architecture At A Glance
 
@@ -165,15 +167,49 @@ Use these as the live demo script:
 
 | Step | Query | What it proves |
 |---|---|---|
-| 1 | “Recommend a dress under $80.” | Verified recommendations, prices, promotions, and product cards. |
-| 2 | “Is the black midi dress in a medium?” | Product/color/size inventory evidence, not product summary fallback. |
-| 3 | “Where is order O1001?” | Read-only order lookup without mutation tools. |
-| 4 | “Recommend a black dress under $80, check Maple Grove medium availability, and explain opened-item returns.” | Dependent multi-intent orchestration across recommendation, inventory, and policy. |
-| 5 | “Do you have any red cocktail dresses under $50?” | Verified internal insufficiency before labeled third-party affiliate offers. |
-| 6 | “Can you charge my card and buy this?” | Safe payment boundary: agents cannot charge cards or complete checkout. |
-| 7 | “What is the weather today?” | Out-of-scope handling with no specialist/tool call. |
+| 1 | "Recommend a dress under $80." | Verified recommendations, prices, promotions, and product cards. |
+| 2 | "I like the second one." | Natural-language product selection among several shown options. |
+| 3 | "Wait, is it available in medium first?" | An interruption doesn't lose context - the correct product is checked, and the pending cart offer survives. |
+| 4 | "Yes." | Cart additions only happen on explicit confirmation, never unilaterally. |
+| 5 | "Is it available at Maple Grove?" | A second specialist (inventory) takes over seamlessly for store-specific stock. |
+| 6 | "Where is order O1001?" (signed in) | Authenticated order + live shipment tracking; unauthenticated/cross-customer requests are blocked. |
+| 7 | "Can I return an opened item?" | A third specialist (policy) answers from real policy documents. |
+| 8 | "Do you have any red cocktail dresses under $50?" | Verified internal insufficiency before labeled, honest third-party alternatives. |
+| 9 | Complete checkout via the storefront UI | Deterministic, non-AI checkout and payment. |
+| 10 | Open `/admin/impact` | The completed sale now reflects in real, measured Scout-attributed revenue. |
 
 See [`docs/demo-script.md`](docs/demo-script.md) for the full talk track.
+
+## Business Impact
+
+Scout tags every recommended product with a verified `recommendation_id` at
+the moment it's shown. That ID is carried through cart-add, checkout, and
+into the persisted `OrderItem` record, so completed sales can be
+independently attributed back to a specific Scout recommendation — not
+just claimed, but calculated with a direct, deterministic SQL query:
+GET /analytics/scout-attributed-revenue
+{"scout_assisted_revenue": ..., "scout_assisted_orders": ..., "scout_attributed_items": ...} 
+An internal `/admin/impact` dashboard presents this live. This mirrors how
+real retail AI teams measure whether an AI assistant investment is actually
+working — internal business intelligence, never shown to the shopper.
+
+## Evaluation Results
+
+Beyond the 412 deterministic unit/integration tests, a separate,
+live-running evaluation suite (`backend/tests/eval/run_eval.py`) exercises
+the real, deployed API — no mocking — across single-turn, multi-turn, and
+routing scenarios, plus dedicated authorization, grounding, and latency
+checks. See [`docs/evaluation.md`](docs/evaluation.md) for full methodology.
+Representative results from a real run:
+
+| Metric | Result |
+|---|---|
+| Overall scenarios passed | 25/25 |
+| Routing accuracy | 6/6 |
+| Authorization blocking rate | 100% (unauthenticated + cross-customer access both blocked; legitimate owner access allowed) |
+| Unsupported claims rendered | 0 |
+| Conversation success rate | 100% |
+| Latency (p50 / p95 / max) | ~1.0s / ~2.4s / ~11-20s (model-dependent) |
 
 ## Safety Claims
 

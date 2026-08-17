@@ -40,6 +40,26 @@ Expected demo point:
 - Product identity, color, size, and inventory are linked through evidence.
 - Product summary alone is not treated as an inventory answer.
 
+## Beat 2b — Contextual Selection, Interruption, and Cart Confirmation
+
+Ask: "I like the second one." (following Beat 1's product list)
+
+Then: "Wait, is it available in medium first?"
+
+Then: "Yes."
+
+Expected demo point:
+
+- Scout resolves "the second one" against the products just shown, not a
+  stale reference from earlier in the conversation.
+- The clarifying question ("is it available in medium?") correctly checks
+  the SAME product the customer just selected, even though it interrupts
+  the pending cart decision.
+- The cart offer survives the interruption - "yes" still confirms the
+  original selection, not something stale or unrelated.
+- The AI never adds anything to the cart without this explicit
+  confirmation step.
+
 ## Beat 3 — Store Availability Without Pickup Overclaim
 
 Ask: “Is it available at Maple Grove?”
@@ -70,6 +90,34 @@ Expected demo point:
 - Third-party offer is clearly labeled.
 - Third-party products are excluded from Scout cart objects.
 - Scout does not present Scout’s return policy as the third-party retailer’s policy.
+
+## Beat 5b — Authenticated Order and Shipment Tracking
+
+Sign in as demo customer C001 first (via the sign-in flow), then ask:
+"Where is order O1001?"
+
+Expected demo point:
+
+- Real, live shipment tracking (carrier, status, estimated delivery) for
+  an order the signed-in customer actually owns.
+- Mention (rather than demo live, for time): an unauthenticated request,
+  or a request for a DIFFERENT customer's order, is blocked the same way -
+  this is a real, tested security boundary, not just a happy-path demo.
+
+## Beat 7 — Business Impact
+
+Open `/admin/impact` in a new tab.
+
+Expected demo point:
+
+- Every recommendation shown earlier was tagged with a real
+  `recommendation_id`.
+- If a recommended item was added to cart and checked out during this
+  demo, the dashboard's Scout-assisted revenue number reflects it live -
+  calculated with a direct, deterministic SQL query, zero AI involvement
+  in the number itself.
+- This is the same kind of attribution real retail AI teams use
+  internally to measure whether an AI assistant investment is working.
 
 ## Beat 6 — Payment Boundary
 
