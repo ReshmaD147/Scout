@@ -305,9 +305,16 @@ def test_no_marker_does_not_invoke_external_agent(monkeypatch):
     # A clear recommendation with real internal matches now correctly
     # bypasses BOTH the recommend_agent specialist AND (since there's a
     # real match) the external_offer_agent entirely, via the
-    # deterministic tool-first path (see tool_first.py).
+    # deterministic tool-first path (see tool_first.py). Mocked here
+    # rather than hitting the real database/embeddings, which aren't
+    # available in CI.
     app = FakeApp()
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        return [{"product_id": "P001", "name": "Dress", "price": 68.0}]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
     monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized())
 
     asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80."))
@@ -360,8 +367,13 @@ def test_streaming_and_non_streaming_use_same_direct_route(monkeypatch):
     # Both paths now consistently use the deterministic tool-first route
     # (see tool_first.py) for this clear recommendation, bypassing the
     # specialist agent entirely on both sides - genuinely the SAME
-    # route, just a different one than before.
+    # route, just a different one than before. Mocked rather than
+    # hitting the real database/embeddings, which aren't available in CI.
+    async def fake_tool(tool_name, args, *, agent_name):
+        return [{"product_id": "P001", "name": "Dress", "price": 68.0}]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
     monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized())
     non_stream = FakeApp()
     stream = FakeApp()

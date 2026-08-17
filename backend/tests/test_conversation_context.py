@@ -74,7 +74,12 @@ def test_verified_selected_product_becomes_active_context(monkeypatch):
     app = App()
     context = {}
     product = {"product_id": "P001", "name": "Black Midi Dress", "price": 79.99, "source": "internal"}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        return [product]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
     monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(products=[product]))
 
     asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80.", conversation_context=context))
@@ -1063,7 +1068,12 @@ def test_pending_clarification_clears_after_successful_completion(monkeypatch):
         "pending_missing_fields": ["use_case", "budget"],
     }
     product = {"product_id": "P010", "name": "Trail Shoe", "price": 69.0, "source": "internal"}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        return [product]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
     monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(products=[product]))
 
     asyncio.run(supervisor.ask(app, [], "Hiking", conversation_context=context))
