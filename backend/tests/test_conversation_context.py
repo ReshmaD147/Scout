@@ -984,21 +984,41 @@ def test_category_followup_with_shopping_filler_still_asks_for_budget(monkeypatc
 
 
 def test_hiking_followup_merges_pending_context_and_routes_recommend(monkeypatch):
+    # Updated for the new deterministic tool-first recommendation path
+    # (see tool_first.py) - a clear, merged recommendation request like
+    # this now correctly bypasses the specialist agent (and therefore
+    # the model) entirely, calling recommend_products directly. This is
+    # a genuine improvement: it removes a real, live-confirmed source of
+    # intermittent failure where the model would sometimes decline to
+    # call any tool for an unambiguous recommendation request.
     app = App()
     context = {
         "active_category": "shoes",
         "pending_intent": "product_recommendation",
         "pending_missing_fields": ["use_case", "budget"],
     }
+    # Return a real, non-empty result here - an EMPTY result correctly
+    # falls through to the real agent instead (needed for the
+    # NEEDS_EXTERNAL_CHECK handoff to external_offer_agent; see
+    # tool_first.py), which is a separate, real scenario covered
+    # elsewhere. This test's purpose is confirming the deterministic
+    # path is used at all for a merged, clear recommendation.
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+        return [{"product_id": "P999", "name": "Trail Runner", "price": 89.99}]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
-    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Hiking shoes verified."))
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
 
     asyncio.run(supervisor.ask(app, [], "Hiking", conversation_context=context))
 
     assert app.graph_calls == 0
-    assert app.scout_specialists["recommend_agent"].calls == 1
-    sent = user_payload_text(app.scout_specialists["recommend_agent"])
-    assert sent == "Find hiking shoes"
+    assert app.scout_specialists["recommend_agent"].calls == 0
+    assert captured.get("tool_name") == "recommend_products"
+    assert captured.get("agent_name") == "recommend_agent"
+    assert "hiking" in captured.get("args", {}).get("query", "").lower()
 
 
 def test_unrelated_followup_does_not_merge_pending_context(monkeypatch):
@@ -1014,16 +1034,25 @@ def test_unrelated_followup_does_not_merge_pending_context(monkeypatch):
 
 
 def test_current_explicit_request_overrides_pending_context(monkeypatch):
+    # Updated for the new deterministic tool-first recommendation path -
+    # a clear, explicit recommendation now correctly bypasses the
+    # specialist agent entirely (see tool_first.py).
     app = App()
     context = {"active_category": "shoes", "pending_intent": "product_recommendation"}
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+        return [{"product_id": "P001", "name": "Wrap Dress", "price": 68.0}]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
-    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Dress verified."))
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
 
     asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80.", conversation_context=context))
 
-    assert app.scout_specialists["recommend_agent"].calls == 1
-    sent = user_payload_text(app.scout_specialists["recommend_agent"])
-    assert sent == "Recommend a dress under $80."
+    assert app.scout_specialists["recommend_agent"].calls == 0
+    assert captured.get("tool_name") == "recommend_products"
+    assert "dress" in captured.get("args", {}).get("query", "").lower()
 
 
 def test_pending_clarification_clears_after_successful_completion(monkeypatch):
@@ -1114,11 +1143,18 @@ def test_explicit_external_request_tool_first_searches_external(monkeypatch):
 def test_internal_search_does_not_route_externally(monkeypatch):
     app = App()
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
-    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized())
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+        return [{"product_id": "P001", "name": "Wrap Dress", "price": 68.0}]
+
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
 
     asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80."))
 
-    assert app.scout_specialists["recommend_agent"].calls == 1
+    assert app.scout_specialists["recommend_agent"].calls == 0
+    assert captured.get("tool_name") == "recommend_products"
     assert app.scout_specialists["external_offer_agent"].calls == 0
 
 

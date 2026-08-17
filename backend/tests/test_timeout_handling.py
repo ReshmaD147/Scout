@@ -144,7 +144,11 @@ def test_provider_transport_failure_returns_safe_http_200_schema(monkeypatch):
     chat_api.SESSION_HISTORIES.clear()
     request = SimpleNamespace(app=SimpleNamespace(state=SimpleNamespace(supervisor_app=ProviderFailingDirectApp())))
 
-    response = asyncio.run(chat_api.chat(request, ChatRequest(message="Recommend a dress under $80.", session_id="provider-fail")))
+    # Deliberately a message with no clean product type - a clear
+    # recommendation now correctly bypasses the model entirely via a
+    # deterministic tool-first path (see tool_first.py), so it would no
+    # longer exercise this specific provider-failure fallback.
+    response = asyncio.run(chat_api.chat(request, ChatRequest(message="Is the black midi dress in a medium?", session_id="provider-fail")))
 
     assert response == ChatResponse(session_id="provider-fail", reply=SAFE_TIMEOUT_REPLY, products=[])
     assert "provider details" not in response.reply

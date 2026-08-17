@@ -190,12 +190,24 @@ def _asserts_available(reply: str) -> bool:
 
 
 def main():
-    from tests.eval.eval_expansion import (
-        run_authorization_scenarios,
-        run_grounding_checks,
-        run_all_stateful_scenarios,
-        build_expanded_summary,
-    )
+    try:
+        from tests.eval.eval_expansion import (
+            run_authorization_scenarios,
+            run_grounding_checks,
+            run_all_stateful_scenarios,
+            build_expanded_summary,
+        )
+    except ImportError:
+        # Running this file directly (python3 tests/eval/run_eval.py)
+        # rather than as part of the pytest-collected package - fall
+        # back to a path-relative import so both invocation styles work.
+        sys.path.insert(0, str(Path(__file__).parent))
+        from eval_expansion import (
+            run_authorization_scenarios,
+            run_grounding_checks,
+            run_all_stateful_scenarios,
+            build_expanded_summary,
+        )
     test_cases = json.loads(TEST_CASES_PATH.read_text())
     conversation_test_cases = json.loads(CONVERSATION_TEST_CASES_PATH.read_text())
     routing_test_cases = json.loads(ROUTING_TEST_CASES_PATH.read_text())

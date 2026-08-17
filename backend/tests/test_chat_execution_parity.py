@@ -458,9 +458,15 @@ def test_order_policy_multi_intent_final_result_matches_streaming(monkeypatch):
 
 
 def test_provider_timeout_safe_failure_final_result_matches_streaming(monkeypatch):
+    # Deliberately an inventory question, not a recommendation - a
+    # clear recommendation request now correctly bypasses the model
+    # entirely via a deterministic tool-first path (see tool_first.py),
+    # so it would no longer exercise this specific failure mode. This
+    # query is unaffected by that change and still correctly routes to
+    # the (here, deliberately failing) specialist agent.
     result = _assert_ask_streaming_parity(
         monkeypatch,
-        "Recommend a dress under $80",
+        "Is the black midi dress in a medium?",
         provider_fails=True,
     )
 

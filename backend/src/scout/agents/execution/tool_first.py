@@ -83,7 +83,19 @@ async def _run_tool_first_if_possible(
     tool_name, args = _tool_first_call(structured_intent, agent_name)
     if not tool_name:
         return False
-    await _execute_read_only_tool(tool_name, args, agent_name=agent_name)
+    result = await _execute_read_only_tool(tool_name, args, agent_name=agent_name)
+    if tool_name == "recommend_products" and not result:
+        # A clear recommendation with genuinely zero internal matches
+        # needs the REAL agent path, not this deterministic shortcut -
+        # only the full recommend_agent (with its NEEDS_EXTERNAL_CHECK
+        # handoff instruction) knows to hand off to external_offer_agent
+        # for real, third-party alternatives. Returning False here lets
+        # the caller correctly fall through to that existing, proven
+        # path. Confirmed via a real regression found while adding this
+        # deterministic path: without this check, a genuinely
+        # unmatched internal search silently produced a generic
+        # "couldn't verify" message instead of real external offers.
+        return False
     _record_tool_first(tool_name, agent_name)
     return True
 
@@ -102,6 +114,25 @@ def _tool_first_call(structured_intent: StructuredIntent, agent_name: str) -> tu
             return "orders", {"order_id": structured_intent.order_id}
         if structured_intent.request_type == "return_eligibility" and structured_intent.order_id:
             return "return_eligibility", {"order_id": structured_intent.order_id}
+    if agent_name == "recommend_agent" and structured_intent.request_type == "product_recommendation" and structured_intent.product_type:
+        # Deterministic tool-first path for a genuinely clear, unambiguous
+        # recommendation request - we already know the product type (and
+        # optionally a budget) from deterministic classification, so
+        # there's no real ambiguity requiring the model's judgment.
+        # Confirmed via a real bug, found through repeated evaluation
+        # runs: without this, EVERY recommendation request - even
+        # unambiguous ones like "do you have any shoes?" - went through
+        # the full AI model, which non-deterministically sometimes
+        # decided not to call any tool at all, producing a genuine,
+        # intermittent "couldn't verify" failure roughly 1 in 3 times.
+        # This uses deterministic state (the already-classified product
+        # type) instead of relying on the model to reliably decide to
+        # search, per the principle of preferring deterministic handling
+        # for information Scout already has.
+        args = {"query": structured_intent.text}
+        if structured_intent.budget_max is not None:
+            args["max_price"] = structured_intent.budget_max
+        return "recommend_products", args
     if agent_name == "recommend_agent" and structured_intent.request_type == "similar_products" and structured_intent.product_id:
         args = {"product_id": structured_intent.product_id, "limit": 3}
         if structured_intent.size:

@@ -174,6 +174,18 @@ def test_streaming_out_of_scope_request_returns_scope_response_without_models_or
 
 
 def test_recommendation_evidence_complete_stops_before_final_model(monkeypatch):
+    # A clear recommendation like this now correctly goes through a
+    # separate, EVEN MORE deterministic tool-first path (see
+    # tool_first.py) that bypasses the specialist agent's model
+    # entirely - a stronger guarantee than what this test originally
+    # checked. To preserve this test's real, original purpose (does the
+    # system correctly avoid an unnecessary second model call once an
+    # agent already has complete evidence), we disable that newer
+    # optimization here specifically, so this test still exercises the
+    # agent-level mechanism it was written for.
+    from scout.agents.execution import tool_first as tool_first_module
+    monkeypatch.setattr(tool_first_module, "_tool_first_call", lambda structured_intent, agent_name: (None, {}))
+
     app = FakeApp()
     product = {"product_id": "P001", "name": "Black Midi Dress", "price": 79.99, "source": "internal"}
     agent = EvidenceCompleteAgent("recommend_products", [product], agent_name="recommend_agent")
@@ -208,19 +220,32 @@ def test_policy_evidence_complete_renders_direct_approved_answer(monkeypatch):
     assert not agent.later_model_started
 
 
-def test_clear_recommendation_invokes_recommend_agent_directly(monkeypatch):
+def test_clear_recommendation_uses_deterministic_tool_first_not_the_agent(monkeypatch):
+    # Renamed and rewritten: a clear recommendation now correctly bypasses
+    # the specialist agent (and therefore the model) entirely, calling
+    # recommend_products directly via the deterministic tool-first path
+    # (see tool_first.py). This is a genuine, intentional improvement
+    # found via repeated evaluation runs - the model would occasionally,
+    # non-deterministically decline to call any tool for an unambiguous
+    # recommendation request, producing a real, intermittent failure.
     app = FakeApp()
-    app.scout_specialists["recommend_agent"] = FakeAgent("recommend_agent", products=[{"product_id": "P001", "name": "Dress", "price": 79.99}])
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+        return [{"product_id": "P001", "name": "Dress", "price": 79.99}]
+
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
-    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(products=kwargs["products"]))
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
 
     reply, history, products = asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80."))
 
-    assert reply == "Verified reply."
-    assert products == [{"product_id": "P001", "name": "Dress", "price": 79.99, "source": "internal"}]
     assert app.graph_calls == 0
-    assert app.scout_specialists["recommend_agent"].calls == 1
-    assert history[-1] == {"role": "assistant", "content": "Verified reply."}
+    assert app.scout_specialists["recommend_agent"].calls == 0
+    assert captured.get("tool_name") == "recommend_products"
+    assert captured.get("agent_name") == "recommend_agent"
+    assert "dress" in captured.get("args", {}).get("query", "").lower()
+    assert history[-1]["role"] == "assistant"
 
 
 def test_clear_size_inventory_request_invokes_inventory_agent_directly(monkeypatch):
@@ -252,6 +277,15 @@ def test_uncertain_request_preserves_supervisor_graph(monkeypatch):
 
 
 def test_external_marker_invokes_external_agent_once_and_marker_is_not_returned(monkeypatch):
+    # This test specifically exercises the recommend_agent -> NEEDS_EXTERNAL_CHECK
+    # -> external_offer_agent handoff via a fake agent - the deterministic
+    # tool-first path (see tool_first.py) is disabled here so the query
+    # correctly reaches that fake agent, rather than hitting the real,
+    # seeded database (which genuinely has matches for this query) and
+    # never reaching the handoff this test is designed to check.
+    from scout.agents.execution import tool_first as tool_first_module
+    monkeypatch.setattr(tool_first_module, "_tool_first_call", lambda structured_intent, agent_name: (None, {}))
+
     app = FakeApp()
     app.scout_specialists["recommend_agent"] = FakeAgent("recommend_agent", content="NEEDS_EXTERNAL_CHECK: red dress")
     app.scout_specialists["external_offer_agent"] = FakeAgent("external_offer_agent", content="External verified reply.")
@@ -268,17 +302,28 @@ def test_external_marker_invokes_external_agent_once_and_marker_is_not_returned(
 
 
 def test_no_marker_does_not_invoke_external_agent(monkeypatch):
+    # A clear recommendation with real internal matches now correctly
+    # bypasses BOTH the recommend_agent specialist AND (since there's a
+    # real match) the external_offer_agent entirely, via the
+    # deterministic tool-first path (see tool_first.py).
     app = FakeApp()
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
     monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized())
 
     asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80."))
 
-    assert app.scout_specialists["recommend_agent"].calls == 1
+    assert app.scout_specialists["recommend_agent"].calls == 0
     assert app.scout_specialists["external_offer_agent"].calls == 0
 
 
 def test_direct_output_still_enters_verification_pipeline(monkeypatch):
+    # Tests that a specialist's direct output still enters the
+    # verification pipeline - the deterministic tool-first path (see
+    # tool_first.py) is disabled here so this specific query reaches the
+    # specialist agent, matching this test's real purpose.
+    from scout.agents.execution import tool_first as tool_first_module
+    monkeypatch.setattr(tool_first_module, "_tool_first_call", lambda structured_intent, agent_name: (None, {}))
+
     app = FakeApp()
     captured = {}
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
@@ -312,6 +357,10 @@ def test_direct_specialist_timeout_is_safe_and_cleans_context(monkeypatch):
 
 
 def test_streaming_and_non_streaming_use_same_direct_route(monkeypatch):
+    # Both paths now consistently use the deterministic tool-first route
+    # (see tool_first.py) for this clear recommendation, bypassing the
+    # specialist agent entirely on both sides - genuinely the SAME
+    # route, just a different one than before.
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
     monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized())
     non_stream = FakeApp()
@@ -322,8 +371,8 @@ def test_streaming_and_non_streaming_use_same_direct_route(monkeypatch):
 
     assert non_stream.graph_calls == 0
     assert stream.graph_calls == 0
-    assert non_stream.scout_specialists["recommend_agent"].calls == 1
-    assert stream.scout_specialists["recommend_agent"].calls == 1
+    assert non_stream.scout_specialists["recommend_agent"].calls == 0
+    assert stream.scout_specialists["recommend_agent"].calls == 0
     assert events[-1] == ("result", ("Verified reply.", []))
 
 
