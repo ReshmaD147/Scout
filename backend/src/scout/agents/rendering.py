@@ -536,7 +536,31 @@ def _inventory_sentences(claims: list[ProposedClaim], customer_message: str = ""
             sentences.append(f"You can expect pickup for {_neutral_product_reference(record['product_name'])} in about {record['pickup_estimate']}.")
         if record["delivery_estimate"] is not None:
             sentences.append(f"Delivery for {_neutral_product_reference(record['product_name'])} takes about {record['delivery_estimate']}.")
-    return sentences
+    return _dedupe_redundant_availability_sentences(sentences)
+
+
+def _dedupe_redundant_availability_sentences(sentences: list[str]) -> list[str]:
+    """Two separate subjects for the same product (e.g. a general
+    in_stock claim and a specific-variant quantity claim) can both
+    produce a plain, generic availability sentence for the same product
+    name - confirmed via live testing: "The Slip Dress is available in
+    medium. The Slip Dress has 3 units available in floral, medium."
+    reads redundantly. Keeps the more informative sentence (the one with
+    a specific quantity) and drops the plainer duplicate for the same
+    product name, rather than restructuring claims/subject grouping.
+    """
+    kept = []
+    seen_products_with_quantity = set()
+    for sentence in sentences:
+        match = re.match(r"^(?:The\s+)?([\w' -]+?)\s+has\s+\d+\s+units? available", sentence)
+        if match:
+            seen_products_with_quantity.add(match.group(1).strip().lower())
+    for sentence in sentences:
+        plain_match = re.match(r"^(?:The\s+)?([\w' -]+?)\s+is (?:available|in stock) in ", sentence)
+        if plain_match and plain_match.group(1).strip().lower() in seen_products_with_quantity:
+            continue
+        kept.append(sentence)
+    return kept
 
 
 def _exact_store_variant_sentence(record: dict) -> str | None:

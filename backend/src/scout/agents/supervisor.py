@@ -493,6 +493,15 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
                 "quantity": 1,
                 "recommendation_id": selected_recommendation_id,
             }
+            # Also update active_product_id/name to this specific
+            # selection - without this, a follow-up question right
+            # after selecting (e.g. "is it available in medium?") would
+            # incorrectly resolve back to whichever product was FIRST
+            # shown in the original list, not the one the customer just
+            # explicitly chose. Confirmed via a real bug: this exact
+            # sequence checked availability for the wrong dress.
+            conversation_context["active_product_id"] = selected_product_id
+            conversation_context["active_product_name"] = product_name
             offer_reply = f"Want me to add the {product_name} to your cart?"
         else:
             offer_reply = "Sorry, I couldn't identify that item. Could you name it directly?"
@@ -524,9 +533,17 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
             session.close()
 
         if cart_result.get("success"):
-            confirm_reply = f"Added the {cart_result['name']} to your cart."
+            from scout.agents.rendering import _natural_size
+            variant_bits = []
+            natural_size = _natural_size(cart_result.get("size"))
+            if natural_size:
+                variant_bits.append(natural_size)
+            if cart_result.get("color"):
+                variant_bits.append(cart_result["color"])
+            variant_text = f" in {', '.join(variant_bits)}" if variant_bits else ""
+            confirm_reply = f"Done — I added the {cart_result['name']}{variant_text} to your cart."
         else:
-            confirm_reply = cart_result.get("error", "Sorry, I couldn't add that to your cart.")
+            confirm_reply = cart_result.get("error", "I couldn't add that to your cart — want to try again?")
 
         history.append({"role": "user", "content": sub_intents[0]})
         history.append({"role": "assistant", "content": confirm_reply})
