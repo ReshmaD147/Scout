@@ -748,7 +748,7 @@ def test_find_similar_black_medium_no_scout_results_returns_clear_message(monkey
         )
     )
 
-    assert reply == "I couldn’t find a Scout alternative to Black Midi Dress matching black, size M, under $80."
+    assert reply == "I couldn’t find a matching alternative to Black Midi Dress matching black, medium, under $80."
     assert products == []
     assert app.graph_calls == 0
     assert app.scout_specialists["recommend_agent"].calls == 0

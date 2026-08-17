@@ -95,7 +95,7 @@ def test_color_specific_unavailable_inventory_renders_from_approved_claims():
     )
 
     assert reply == (
-        "The Black Midi Dress is out of stock in black, size M. "
+        "The Black Midi Dress is out of stock in black, medium. "
         "I can check nearby stores, check online or delivery availability, or find similar products."
     )
     assert products == []
@@ -137,7 +137,7 @@ def test_variant_unavailable_overrides_general_store_inventory_wording():
     )
 
     assert reply == (
-        "Maple Grove has other inventory for that item, but the black, size M option is currently out of stock. "
+        "Maple Grove has other inventory for that item, but the black, medium option is currently out of stock. "
         "I can check nearby stores, check online or delivery availability, or find similar products."
     )
     assert products == []
@@ -160,7 +160,7 @@ def test_nearby_store_variant_unavailable_renders_not_found_nearby():
     )
 
     assert reply == (
-        "Black Midi Dress in black, size M is not available in nearby store inventory. "
+        "Black Midi Dress in black, medium is not available in nearby store inventory. "
         "I can check nearby stores, check online or delivery availability, or find similar products."
     )
     assert products == []
@@ -183,7 +183,7 @@ def test_online_delivery_variant_unavailable_renders_delivery_specific_reply():
     )
 
     assert reply == (
-        "The Black Midi Dress in black, size M is unavailable for online or delivery fulfillment. "
+        "The Black Midi Dress in black, medium is unavailable for online or delivery fulfillment. "
         "I can find similar products."
     )
     assert products == []
@@ -204,7 +204,7 @@ def test_online_delivery_variant_available_renders_delivery_specific_reply():
         customer_message="Check online or delivery availability for Black Midi Dress in black, size S",
     )
 
-    assert reply == "The Black Midi Dress in black, size S is available for delivery, with 3 units available."
+    assert reply == "The Black Midi Dress in black, small is available for delivery, with 3 units available."
 
 
 def test_exact_store_variant_available_renders_narrow_store_variant_fact():
@@ -222,7 +222,7 @@ def test_exact_store_variant_available_renders_narrow_store_variant_fact():
         customer_message="Is it available at Maple Grove?",
     )
 
-    assert reply == "The Black Midi Dress is available at Maple Grove in black, size M, with 2 units remaining."
+    assert reply == "The Black Midi Dress is available at Maple Grove in black, medium, with 2 units remaining."
 
 
 def test_products_render_only_approved_identity_price_and_optional_fields_without_mutation():
@@ -416,7 +416,7 @@ def test_size_availability_renders_request_specific_available_and_unavailable():
         customer_message="Is the black midi dress in a medium?",
     )
 
-    assert reply == "The Black Midi Dress has 2 units available in size M."
+    assert reply == "The Black Midi Dress has 2 units available in medium."
     assert products == []
 
     unavailable = claims[:1] + [
@@ -431,7 +431,7 @@ def test_size_availability_renders_request_specific_available_and_unavailable():
     )
 
     assert reply == (
-        "The Black Midi Dress is out of stock in size M. "
+        "The Black Midi Dress is out of stock in medium. "
         "I can check nearby stores, check online or delivery availability, or find similar products."
     )
 

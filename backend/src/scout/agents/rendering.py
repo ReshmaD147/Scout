@@ -593,11 +593,28 @@ def _neutral_product_reference(product_name: str | None) -> str:
     return product_name or "the requested product"
 
 
+SIZE_NAMES = {
+    "XS": "extra small", "S": "small", "M": "medium",
+    "L": "large", "XL": "extra large", "XXL": "double extra large",
+}
+
+
+def _natural_size(size: str | None) -> str | None:
+    """Converts a size code to natural language ("medium" instead of
+    "size M") for customer-facing sentences, per tone guidelines - the
+    underlying code/database still uses the short form everywhere else.
+    """
+    if not size:
+        return None
+    return SIZE_NAMES.get(size.upper(), size)
+
+
 def _variant_context(size: str | None, color: str | None) -> str:
-    if size and color:
-        return f"{color}, size {size}"
-    if size:
-        return f"size {size}"
+    natural = _natural_size(size)
+    if natural and color:
+        return f"{color}, {natural}"
+    if natural:
+        return natural
     if color:
         return color
     return ""

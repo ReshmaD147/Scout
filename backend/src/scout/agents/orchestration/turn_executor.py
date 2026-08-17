@@ -198,6 +198,12 @@ def _alternatives_no_match(evidence_entries: list) -> bool:
     return False
 
 
+SIZE_NAMES_TURN = {
+    "XS": "extra small", "S": "small", "M": "medium",
+    "L": "large", "XL": "extra large", "XXL": "double extra large",
+}
+
+
 def _similar_products_no_match_reply(structured_intent: StructuredIntent) -> str:
     product_name = "that item"
     match = re.search(r"\(([^)]+)\)", structured_intent.text or "")
@@ -207,11 +213,12 @@ def _similar_products_no_match_reply(structured_intent: StructuredIntent) -> str
     if structured_intent.color:
         constraints.append(str(structured_intent.color).strip())
     if structured_intent.size:
-        constraints.append(f"size {structured_intent.size}")
+        natural_size = SIZE_NAMES_TURN.get(str(structured_intent.size).upper(), structured_intent.size)
+        constraints.append(natural_size)
     if structured_intent.budget_max is not None:
         constraints.append(f"under ${structured_intent.budget_max:g}")
     constraint_text = f" matching {', '.join(constraints)}" if constraints else ""
-    return f"I couldn’t find a Scout alternative to {product_name}{constraint_text}."
+    return f"I couldn’t find a matching alternative to {product_name}{constraint_text}."
 
 
 async def _run_supervisor_turn_streaming(app, history: list[dict], messages_before: int) -> tuple[list, bool] | None:

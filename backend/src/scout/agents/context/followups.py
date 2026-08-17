@@ -109,6 +109,20 @@ def _continue_pending_cart_offer(message: str, context: dict) -> SplitIntentResu
     AFFIRMATIVES = {"yes", "yeah", "yep", "sure", "please", "ok", "okay", "add it", "add to cart"}
 
     if normalized not in AFFIRMATIVES:
+        # A genuine clarifying question about the SAME pending item
+        # (e.g. "is it available in medium first?") should PRESERVE the
+        # offer, not discard it - the customer hasn't declined, they're
+        # gathering more information before deciding. Only a message
+        # that looks like a real topic change clears the offer.
+        # Confirmed via a real, live-tested conversation: clearing here
+        # unconditionally broke a genuinely common pattern (interrupting
+        # a cart offer with a relevant question, then confirming).
+        clarification_terms = (
+            "available", "availability", "stock", "size", "medium",
+            "large", "small", "color", "colour",
+        )
+        if any(term in normalized for term in clarification_terms):
+            return None
         context["pending_cart_offer"] = None
         return None
 
@@ -502,26 +516,42 @@ ORDINAL_WORDS = {
 }
 
 
+# Requires the ordinal word to appear in a genuine SELECTION shape -
+# "the second one", "the third dress", "number two" - not just anywhere
+# in the message. Confirmed via a real bug: plain word-matching let
+# "first" in "is it available in medium first?" (meaning "before we
+# continue", not "item #1") incorrectly resolve to the first product in
+# the list, silently answering about the wrong item entirely.
+ORDINAL_SELECTION_RE = re.compile(
+    r"\b(?:the\s+)?(first|1st|second|2nd|third|3rd|fourth|4th|fifth|5th|last)\s+(?:one|dress|item|option|product)\b"
+    r"|\bnumber\s+(one|two|three|four|five|1|2|3|4|5)\b",
+    re.IGNORECASE,
+)
+
+
 def _resolve_ordinal_reference(message: str, selected: list[dict]) -> dict | None:
     """Matches phrases like 'the second one', 'the second dress', 'the
     last option' against the exact order products were actually shown in
     (active_selected_products, which preserves display order - see
     _update_context_from_verified_turn in conversation.py). Deliberately
-    simple, exact-word matching - no fuzzy logic - since an incorrect
-    ordinal match here could lead to offering to add the WRONG product to
-    cart, which is a real, meaningful mistake to avoid.
+    requires a genuine selection-shaped phrase (see ORDINAL_SELECTION_RE),
+    not just any occurrence of an ordinal word - an incorrect ordinal
+    match here could lead to offering to add the WRONG product to cart,
+    which is a real, meaningful mistake to avoid.
     """
     if not selected:
         return None
     normalized = _normalize_context_text(message)
-    words = normalized.split()
-    for word in words:
-        if word in ORDINAL_WORDS:
-            index = ORDINAL_WORDS[word]
-            try:
-                return selected[index]
-            except IndexError:
-                return None
+    match = ORDINAL_SELECTION_RE.search(normalized)
+    if not match:
+        return None
+    word = (match.group(1) or match.group(2) or "").lower()
+    if word in ORDINAL_WORDS:
+        index = ORDINAL_WORDS[word]
+        try:
+            return selected[index]
+        except IndexError:
+            return None
     return None
 
 
@@ -539,6 +569,21 @@ def _resolve_context_product(message: str, context: dict) -> dict | str | None:
     ordinal_match = _resolve_ordinal_reference(message, selected)
     if ordinal_match is not None:
         return ordinal_match
+    # A pending cart offer represents the customer's most recent,
+    # specific focus - it takes precedence over the more general
+    # active_product_id, which can otherwise drift stale (e.g. still
+    # pointing at the FIRST product from a list, even after the
+    # customer explicitly selected a different one). Confirmed via a
+    # real, live-tested conversation: "I like the second one" -> "is it
+    # available in medium?" incorrectly checked the first product shown,
+    # not the one the customer had just selected and was awaiting
+    # confirmation on.
+    pending_offer = context.get("pending_cart_offer")
+    if pending_offer and pending_offer.get("product_id"):
+        return {
+            "product_id": pending_offer["product_id"],
+            "name": pending_offer.get("product_name"),
+        }
     active_id = context.get("active_product_id")
     if active_id:
         for item in selected:

@@ -197,7 +197,7 @@ def test_mi_03_constraints_survive_recommendation_inventory_policy_handoff(monke
     store_calls = [call for call in result.calls if call[1] == "stores"]
     assert stock_calls[0][2] == {"product_id": "P001", "size": "M", "color": "black"}
     assert store_calls[0][2] == {"product_id": "P001", "store_name": "Maple Grove"}
-    assert "Maple Grove has other inventory for that item, but the black, size M option is currently out of stock" in result.reply
+    assert "Maple Grove has other inventory for that item, but the black, medium option is currently out of stock" in result.reply
     assert "Opened or worn items usually aren’t eligible for a return unless they’re defective" in result.reply
 
 
@@ -229,7 +229,7 @@ def test_mi_03_short_demo_prompt_is_not_swallowed_by_follow_up_context(monkeypat
     assert result.calls[1][2] == {"product_id": "P001", "size": "M", "color": "black"}
     assert result.calls[2][2] == {"product_id": "P001", "store_name": "Maple Grove"}
     assert "Floral Sundress" not in result.reply
-    assert "Maple Grove has other inventory for that item, but the black, size M option is currently out of stock" in result.reply
+    assert "Maple Grove has other inventory for that item, but the black, medium option is currently out of stock" in result.reply
     assert "Opened or worn items usually aren’t eligible for a return unless they’re defective" in result.reply
 
 

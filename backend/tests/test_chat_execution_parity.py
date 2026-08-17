@@ -359,7 +359,7 @@ def test_exact_variant_inventory_final_result_matches_streaming(monkeypatch):
     result = _assert_ask_streaming_parity(monkeypatch, "Is the black midi dress in a medium?")
 
     assert "out of stock" in result.reply
-    assert "black, size M" in result.reply
+    assert "black, medium" in result.reply
     assert result.products == []
 
 
@@ -408,7 +408,7 @@ def test_similar_products_no_match_special_reply_matches_streaming(monkeypatch):
     )
 
     assert stream_result == (non_reply, non_products)
-    assert non_reply == "I couldn’t find a Scout alternative to Black Midi Dress matching black, size M."
+    assert non_reply == "I couldn’t find a matching alternative to Black Midi Dress matching black, medium."
     assert non_products == []
 
 
