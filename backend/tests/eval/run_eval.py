@@ -189,15 +189,13 @@ def _asserts_available(reply: str) -> bool:
     return " is available " in reply and not _mentions_unavailable(reply)
 
 
-from eval_expansion import (
-    run_authorization_scenarios,
-    run_grounding_checks,
-    run_all_stateful_scenarios,
-    build_expanded_summary,
-)
-
-
 def main():
+    from tests.eval.eval_expansion import (
+        run_authorization_scenarios,
+        run_grounding_checks,
+        run_all_stateful_scenarios,
+        build_expanded_summary,
+    )
     test_cases = json.loads(TEST_CASES_PATH.read_text())
     conversation_test_cases = json.loads(CONVERSATION_TEST_CASES_PATH.read_text())
     routing_test_cases = json.loads(ROUTING_TEST_CASES_PATH.read_text())
