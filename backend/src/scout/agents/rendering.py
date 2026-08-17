@@ -349,7 +349,7 @@ def _internal_product_summary_sentences(products: list[dict]) -> list[str]:
     if len(priced) == len(products):
         return [_product_list_summary(products)]
 
-    return [f"Here are {len(products)} verified options from our catalog: {_product_name_list(products)}."]
+    return [f"Here are {len(products)} options from our catalog: {_product_name_list(products)}."]
 
 
 def _product_list_summary(products: list[dict]) -> str:
@@ -476,13 +476,13 @@ def _inventory_sentences(claims: list[ProposedClaim], customer_message: str = ""
         if record["store_name"] and record["product_id"]:
             if record["quantity"] is not None:
                 if record["quantity"] > 0:
-                    sentences.append(f"{product_label} is available at the {record['store_name']} store with {record['quantity']} units.")
+                    sentences.append(f"{product_label} is in stock at {record['store_name']} — {record['quantity']} available.")
                 else:
-                    sentences.append(f"{product_label} is not currently available at the {record['store_name']} store.")
+                    sentences.append(f"{product_label} isn’t available at {record['store_name']} right now.")
                 continue
             if record["in_stock"] is not None:
                 sentences.append(
-                    f"{product_label} is {'available' if record['in_stock'] else 'not currently available'} at the {record['store_name']} store."
+                    f"{product_label} is {'in stock' if record['in_stock'] else 'not in stock'} at {record['store_name']}."
                 )
                 continue
         if variant_context and record["product_id"]:

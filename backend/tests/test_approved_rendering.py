@@ -453,7 +453,7 @@ def test_store_availability_renders_request_specific_answer_without_price_replac
         customer_message="Is the black midi dress available at Maple Grove?",
     )
 
-    assert reply == "The Black Midi Dress is available at the Maple Grove store with 2 units."
+    assert reply == "The Black Midi Dress is in stock at Maple Grove — 2 available."
     assert products == [
         {
             "product_id": "P001",

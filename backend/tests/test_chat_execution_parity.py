@@ -367,7 +367,7 @@ def test_store_availability_final_result_matches_streaming(monkeypatch):
     result = _assert_ask_streaming_parity(monkeypatch, "Is the black midi dress available at Maple Grove?")
 
     assert "Maple Grove" in result.reply
-    assert "2 units" in result.reply
+    assert "2 available" in result.reply
     assert result.products == []
 
 
