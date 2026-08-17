@@ -101,3 +101,13 @@ export async function addToCartRequest(productId, quantity = 1, options = {}) {
 
   return response.json();
 }
+
+export async function getScoutImpact() {
+  const response = await fetch(`${BASE_URL}/analytics/scout-attributed-revenue`);
+
+  if (!response.ok) {
+    throw new Error(`Scout impact request failed: ${response.status}`);
+  }
+
+  return response.json();
+}

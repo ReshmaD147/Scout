@@ -9,6 +9,7 @@ import CartPage from "./pages/CartPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
 import SavedItemsPage from "./pages/SavedItemsPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
+import ImpactDashboardPage from "./pages/ImpactDashboardPage";
 import "./styles/tokens.css";
 
 function App() {
@@ -18,6 +19,7 @@ function App() {
         <ChatWidgetProvider>
           <BrowserRouter>
             <Routes>
+              <Route path="/admin/impact" element={<ImpactDashboardPage />} />
               <Route path="/" element={<Layout />}>
                 <Route index element={<HomePage />} />
                 <Route path="category/:category" element={<CategoryPage />} />
