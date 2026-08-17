@@ -15,7 +15,7 @@ export default function HomePage() {
             Find the right look faster — with facts checked before you buy.
           </h1>
           <p className="home-hero-subtitle">
-            Scout helps compare products, check availability, and keep checkout safely in the storefront.
+            Lumi helps compare products, check availability, and keep checkout safely in the storefront.
           </p>
           <div className="home-hero-actions">
             <Link to="/category/dresses" className="home-hero-btn">

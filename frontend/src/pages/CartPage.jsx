@@ -138,7 +138,7 @@ export default function CartPage() {
       <div className="cart-empty">
         <div className="cart-empty-icon" aria-hidden="true">🛒</div>
         <h2>Your cart is empty</h2>
-        <p>Find something you love, then Scout will keep checkout secure and deterministic.</p>
+        <p>Find something you love, then Lumi will keep checkout secure and deterministic.</p>
         <Link to="/" className="cart-empty-link">Continue shopping</Link>
       </div>
     );

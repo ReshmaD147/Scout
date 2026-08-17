@@ -99,8 +99,8 @@ export default function Layout() {
     <div className="layout">
       <header className="layout-header">
         <Link to="/" className="layout-logo">
-          <span className="layout-logo-mark">S</span>
-          <span className="layout-logo-text">Scout</span>
+          <span className="layout-logo-mark">L</span>
+          <span className="layout-logo-text">Lumi</span>
         </Link>
 
         <form className="layout-search" onSubmit={handleSearchSubmit} role="search">
@@ -137,7 +137,7 @@ export default function Layout() {
             </button>
             {accountOpen && (
               <div className="layout-account-dropdown">
-                <p className="layout-account-title">Your Scout account</p>
+                <p className="layout-account-title">Your Lumi account</p>
                 <p className="layout-account-subtitle">
                   Sign in to track orders, save items, and get personalized help.
                 </p>
