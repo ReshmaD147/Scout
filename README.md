@@ -15,7 +15,8 @@ The guiding rule is simple: **anything that can cost money or trust stays determ
 - **Local demo mode:** `ENABLE_STRIPE_MCP=false MODEL_PROVIDER=ollama` starts the app without Stripe MCP discovery while preserving deterministic Stripe REST checkout code.
 - **Recommendation-driven revenue tracking:** every recommendation is tagged with a verified `recommendation_id`, carried through cart and checkout, so completed sales can be independently attributed back to Scout — see the internal `/admin/impact` dashboard.
 - **Shipment tracking:** authenticated customers can ask about live carrier, status, and estimated delivery for their own orders, with the same read-only-tool and evidence/claims/verification boundary as everything else.
-- **Validated baseline:** 412 deterministic backend tests pass, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
+- **Deterministic tool-first path:** clear, unambiguous requests (a specific recommendation, order lookup, or inventory check) bypass the language model entirely and call the appropriate tool directly — removing a real source of non-deterministic behavior for requests that don't need the model's judgment at all.
+- **Validated baseline:** 413 deterministic backend tests pass, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Architecture At A Glance
 
@@ -23,17 +24,19 @@ The guiding rule is simple: **anything that can cost money or trust stays determ
 
 ```mermaid
 flowchart LR
-  Browser["React storefront"] --> Rest["Deterministic REST routes"]
+  Browser["React storefront (Lumi)"] --> Rest["Deterministic REST routes"]
   Browser --> Chat["/chat and /chat/stream"]
   Rest --> Services["Shared service layer"]
   Chat --> Splitter["Intent splitter / deterministic fast paths"]
   Splitter --> Scope["Safe scope response"]
   Splitter --> Plan["Ordered multi-agent plan"]
   Splitter --> Supervisor["Supervisor / orchestration path"]
+  Splitter --> ToolFirst["Deterministic tool-first path"]
   Splitter --> Direct["Direct specialist routing"]
   Scope --> Render
   Plan --> Specialists
   Supervisor --> Specialists["Five specialist agents"]
+  ToolFirst --> Tools
   Direct --> Specialists
   Specialists --> Tools["Allowlisted local Scout MCP tools"]
   Tools --> Services
@@ -42,6 +45,11 @@ flowchart LR
   Evidence --> Claims["ProposedClaim verification"]
   Claims --> Render["Approved-only rendering"]
   Render --> Browser
+  Rest --> Cart["Cart add - validates recommendation_id"]
+  Cart --> Checkout["Checkout - deterministic order + payment"]
+  Checkout --> OrderDB["OrderItem: attribution + recommendation_id"]
+  OrderDB --> Analytics["Attribution analytics endpoint"]
+  Analytics --> Dashboard["/admin/impact dashboard"]
 ```
 
 See [`docs/architecture.md`](docs/architecture.md) for the detailed flow and [`docs/assets/scout-current-architecture.png`](docs/assets/scout-current-architecture.png) for the full current architecture diagram.
@@ -182,25 +190,18 @@ See [`docs/demo-script.md`](docs/demo-script.md) for the full talk track.
 
 ## Business Impact
 
-Scout tags every recommended product with a verified `recommendation_id` at
-the moment it's shown. That ID is carried through cart-add, checkout, and
-into the persisted `OrderItem` record, so completed sales can be
-independently attributed back to a specific Scout recommendation — not
-just claimed, but calculated with a direct, deterministic SQL query:
+Scout tags every recommended product with a verified `recommendation_id` at the moment it's shown. That ID is carried through cart-add, checkout, and into the persisted `OrderItem` record, so completed sales can be independently attributed back to a specific Scout recommendation — not just claimed, but calculated with a direct, deterministic SQL query:
+
+```
 GET /analytics/scout-attributed-revenue
-{"scout_assisted_revenue": ..., "scout_assisted_orders": ..., "scout_attributed_items": ...} 
-An internal `/admin/impact` dashboard presents this live. This mirrors how
-real retail AI teams measure whether an AI assistant investment is actually
-working — internal business intelligence, never shown to the shopper.
+{"scout_assisted_revenue": ..., "scout_assisted_orders": ..., "scout_attributed_items": ...}
+```
+
+An internal `/admin/impact` dashboard presents this live. This mirrors how real retail AI teams measure whether an AI assistant investment is actually working — internal business intelligence, never shown to the shopper.
 
 ## Evaluation Results
 
-Beyond the 412 deterministic unit/integration tests, a separate,
-live-running evaluation suite (`backend/tests/eval/run_eval.py`) exercises
-the real, deployed API — no mocking — across single-turn, multi-turn, and
-routing scenarios, plus dedicated authorization, grounding, and latency
-checks. See [`docs/evaluation.md`](docs/evaluation.md) for full methodology.
-Representative results from a real run:
+Beyond the 413 deterministic unit/integration tests, a separate, live-running evaluation suite (`backend/tests/eval/run_eval.py`) exercises the real, deployed API — no mocking — across single-turn, multi-turn, and routing scenarios, plus dedicated authorization, grounding, and latency checks. See [`docs/evaluation.md`](docs/evaluation.md) for full methodology. Representative results from a real run:
 
 | Metric | Result |
 |---|---|
@@ -210,6 +211,15 @@ Representative results from a real run:
 | Unsupported claims rendered | 0 |
 | Conversation success rate | 100% |
 | Latency (p50 / p95 / max) | ~1.0s / ~2.4s / ~11-20s (model-dependent) |
+
+## Conversation Behavior
+
+Scout is deliberately user-led, not AI-led. It responds to what the customer asks; it does not steer the conversation toward a purchase or manufacture engagement on its own initiative.
+
+- **Proactive behavior is intentionally limited.** The main exception is the Phase 2 cart offer ("Want me to add the X to your cart?"), which appears only after the customer has already selected or shown interest in a specific product. Scout still requires explicit confirmation before adding anything and never acts unilaterally.
+- **Clarifying questions are need-driven, not sales-driven.** Scout asks questions such as "What's your budget?" only when required information is missing from the customer's request. It does not use follow-up questions to steer the customer toward a purchase or manufacture engagement.
+
+Together, these reinforce a core principle: Scout can assist and suggest, but the customer remains in control of the conversation and every meaningful action.
 
 ## Safety Claims
 
@@ -227,4 +237,3 @@ Representative results from a real run:
 - Ollama latency depends heavily on local hardware; release eval should run in isolation.
 - The verifier covers explicit Scout-domain claim types; it is not a formal proof system or broad semantic entailment engine.
 - External-offer images are allowlisted/seeded demo URLs; retailer CDNs can still be brittle outside the app's control.
-

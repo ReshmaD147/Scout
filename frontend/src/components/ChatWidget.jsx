@@ -178,7 +178,7 @@ function ChatProductCard({ product, onInternalProductClick }) {
       </div>
       <div className="chat-widget-product-copy">
         <p className="chat-widget-product-brand">
-          {isExternal ? product.vendor_name : product.brand || "Scout"}
+          {isExternal ? product.vendor_name : product.brand || "Our catalog"}
         </p>
         <p className="chat-widget-product-name">{product.name}</p>
         <div className="chat-widget-product-price-row">
