@@ -211,6 +211,7 @@ Beyond the 413 deterministic unit/integration tests, a separate, live-running ev
 | Unsupported claims rendered | 0 |
 | Conversation success rate | 100% |
 | Latency (p50 / p95 / max) | ~1.0s / ~2.4s / ~11-20s (model-dependent) |
+| Prompt injection resistance | 5/5 (instruction override, role confusion, false authority, prompt extraction, injected fake instructions) |
 
 ## Conversation Behavior
 
