@@ -21,6 +21,7 @@ def create_test_payment(
     amount_usd: float,
     description: str = "Scout order",
     metadata: dict[str, str] | None = None,
+    receipt_email: str | None = None,
 ) -> dict:
     """Creates a Stripe test-mode PaymentIntent for the given amount.
     Deterministic — no LLM reasoning needed to move money.
@@ -60,6 +61,7 @@ def create_test_payment(
             automatic_payment_methods={"enabled": True},
             confirm=False,
             metadata=metadata or {},
+            receipt_email=receipt_email,
         )
     except stripe.error.StripeError as e:
         raise PaymentProcessingError(f"Payment could not be processed: {e.user_message or str(e)}") from e
@@ -93,4 +95,5 @@ def retrieve_test_payment(payment_intent_id: str) -> dict:
         "currency": intent.currency,
         "status": intent.status,
         "metadata": dict(intent.metadata or {}),
+        "receipt_email": getattr(intent, "receipt_email", None),
     }

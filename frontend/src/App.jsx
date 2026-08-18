@@ -9,6 +9,7 @@ import CategoryPage from "./pages/CategoryPage";
 import CartPage from "./pages/CartPage";
 import SearchResultsPage from "./pages/SearchResultsPage";
 import SavedItemsPage from "./pages/SavedItemsPage";
+import AccountPage from "./pages/AccountPage";
 import ProductDetailPage from "./pages/ProductDetailPage";
 import ImpactDashboardPage from "./pages/ImpactDashboardPage";
 import "./styles/tokens.css";
@@ -28,6 +29,7 @@ function App() {
                 <Route path="cart" element={<CartPage />} />
                 <Route path="search" element={<SearchResultsPage />} />
                 <Route path="saved" element={<SavedItemsPage />} />
+                <Route path="account" element={<AccountPage />} />
                 <Route path="product/:productId" element={<ProductDetailPage />} />
               </Route>
             </Routes>

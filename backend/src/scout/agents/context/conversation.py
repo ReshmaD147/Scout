@@ -18,6 +18,7 @@ CONTEXT_KEYS = {
     "requested_budget_max",
     "pending_intent",
     "pending_missing_fields",
+    "pending_store_availability_product_id",
     "last_out_of_stock_product_id",
 }
 

@@ -441,6 +441,10 @@ def _inventory_sentences(claims: list[ProposedClaim], customer_message: str = ""
     if combined_store_sentence:
         return [combined_store_sentence]
 
+    combined_variant_sentence = _combined_variant_availability_sentence(records)
+    if combined_variant_sentence:
+        return [combined_variant_sentence]
+
     for record in records:
         if record["store_name"] and (record["size"] or record["color"]):
             sentence = _exact_store_variant_sentence(record)
@@ -595,6 +599,75 @@ def _combined_store_availability_sentence(records: list[dict]) -> str | None:
     store_names = _join_phrases([record["store_name"] for record in store_records])
     quantity = store_records[0]["quantity"]
     return f"{product_label} is available at {store_names}, with {quantity} units at each store."
+
+
+def _combined_variant_availability_sentence(records: list[dict]) -> str | None:
+    variant_records = [
+        record
+        for record in records
+        if record["product_id"]
+        and record["size"]
+        and not record["store_name"]
+        and (record["quantity"] is not None or record["in_stock"] is not None)
+    ]
+    if len(variant_records) < 2:
+        return None
+
+    product_ids = {record["product_id"] for record in variant_records}
+    colors = {record["color"] or "" for record in variant_records}
+    if len(product_ids) != 1 or len(colors) > 1:
+        return None
+
+    product_label = _product_label(variant_records[0]["product_name"])
+    color = variant_records[0]["color"]
+    available = [
+        record
+        for record in variant_records
+        if (record["quantity"] is not None and record["quantity"] > 0) or record["in_stock"] is True
+    ]
+    unavailable = [
+        record
+        for record in variant_records
+        if record["quantity"] == 0 or record["in_stock"] is False
+    ]
+
+    parts = []
+    if available:
+        quantities = {record["quantity"] for record in available if record["quantity"] is not None}
+        available_sizes = _join_phrases([_natural_size(record["size"]) for record in available])
+        if len(quantities) == 1:
+            quantity = quantities.pop()
+            unit_text = "unit" if quantity == 1 else "units"
+            if len(available) == 1:
+                parts.append(f"{available_sizes} has {quantity} {unit_text} available")
+            else:
+                parts.append(
+                    _join_phrases([f"{_natural_size(record['size'])} has {quantity} {unit_text}" for record in available])
+                    + " available"
+                )
+        else:
+            available_text = _join_phrases(
+                [
+                    f"{_natural_size(record['size'])} has {record['quantity']} {'unit' if record['quantity'] == 1 else 'units'}"
+                    if record["quantity"] is not None
+                    else f"{_natural_size(record['size'])} is available"
+                    for record in available
+                ]
+            )
+            parts.append(available_text)
+
+    if unavailable:
+        unavailable_sizes = _join_phrases([_natural_size(record["size"]) for record in unavailable])
+        parts.append(f"{unavailable_sizes} {'is' if len(unavailable) == 1 else 'are'} out of stock")
+
+    if not parts:
+        return None
+
+    variant_prefix = f" in {color}" if color else ""
+    return (
+        f"{product_label}{variant_prefix}: {', but '.join(parts)}. "
+        "Want me to check nearby stores or find a similar option?"
+    )
 
 
 def _store_has_general_inventory_but_variant_unavailable_sentence(variant: dict, store: dict) -> str:

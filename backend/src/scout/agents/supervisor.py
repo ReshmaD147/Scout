@@ -214,6 +214,18 @@ def _reset_order_tool_auth_context(token) -> None:
     local_tools.reset_authenticated_customer_id(token)
 
 
+def _set_recommendation_tool_session_context(session_id: str | None):
+    from scout.mcp_server import server as local_tools
+
+    return local_tools.set_recommendation_session_id(session_id)
+
+
+def _reset_recommendation_tool_session_context(token) -> None:
+    from scout.mcp_server import server as local_tools
+
+    local_tools.reset_recommendation_session_id(token)
+
+
 def _decimal_money(value) -> Decimal | None:
     if isinstance(value, bool) or value is None:
         return None
@@ -593,9 +605,10 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
     return final_reply, history, all_products
 
 
-async def ask(app, history: list[dict], message: str, debug: bool = False, conversation_context: dict | None = None):
+async def ask(app, history: list[dict], message: str, debug: bool = False, conversation_context: dict | None = None, session_id: str | None = None):
     start_diagnostics()
     auth_token = _set_order_tool_auth_context(conversation_context)
+    recommendation_session_token = _set_recommendation_tool_session_context(session_id)
     try:
         with timed_stage("complete_chat_request"):
             return await _wait_for(
@@ -608,6 +621,7 @@ async def ask(app, history: list[dict], message: str, debug: bool = False, conve
         return SAFE_TIMEOUT_REPLY, history, []
     finally:
         _reset_order_tool_auth_context(auth_token)
+        _reset_recommendation_tool_session_context(recommendation_session_token)
         log_request_complete()
         clear_evidence_context()
         clear_diagnostics()
@@ -734,6 +748,7 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
     """
     start_diagnostics()
     auth_token = _set_order_tool_auth_context(conversation_context)
+    recommendation_session_token = _set_recommendation_tool_session_context(session_id)
     try:
         async with asyncio.timeout(settings.CHAT_REQUEST_TIMEOUT_SECONDS):
             if not message or not message.strip():
@@ -900,6 +915,7 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
         yield ("result", (SAFE_TIMEOUT_REPLY, []))
     finally:
         _reset_order_tool_auth_context(auth_token)
+        _reset_recommendation_tool_session_context(recommendation_session_token)
         log_request_complete()
         clear_evidence_context()
         clear_diagnostics()

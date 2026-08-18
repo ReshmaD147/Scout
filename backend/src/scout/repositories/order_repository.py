@@ -29,11 +29,23 @@ class OrderRepository:
         """Return every order placed by a given customer."""
         return self.session.query(Order).filter_by(customer_id=customer_id).all()
 
-    def create(self, order_id: str, customer_id: str, status: str = "pending") -> Order:
+    def create(
+        self,
+        order_id: str,
+        customer_id: str,
+        status: str = "pending",
+        checkout_details: dict | None = None,
+    ) -> Order:
         """Build a new Order and stage it for saving. Does not commit —
         the caller commits once, after also adding line items.
         """
-        order = Order(order_id=order_id, customer_id=customer_id, status=status)
+        checkout_details = checkout_details or {}
+        order = Order(
+            order_id=order_id,
+            customer_id=customer_id,
+            status=status,
+            **checkout_details,
+        )
         self.session.add(order)
         return order
 

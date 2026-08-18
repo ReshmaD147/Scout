@@ -328,6 +328,9 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
     order_follow_up = _resolve_order_follow_up_intent(message, context, base_intent)
     if order_follow_up is not None:
         return order_follow_up
+    pending_store_follow_up = _resolve_pending_store_location_follow_up(message, context)
+    if pending_store_follow_up is not None:
+        return pending_store_follow_up
     is_follow_up = bool(FOLLOW_UP_PRODUCT_RE.search(normalized))
     wants_similar_products = _is_scout_similar_products_request(normalized)
     # Only even consult the recovery-action keyword matcher when there's
@@ -398,6 +401,7 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
     if resolved_type == "store_availability" and not location and context.get("requested_store"):
         location = context.get("requested_store")
     if resolved_type == "store_availability" and not location:
+        context["pending_store_availability_product_id"] = product["product_id"]
         return "Which store or ZIP code should I use to check nearby availability?"
     product_name = product.get("name") or context.get("active_product_name") or product["product_id"]
     if wants_delivery_availability:
@@ -437,6 +441,52 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
         extraction_source="deterministic_conversation_context",
     )
     _record_context_resolution("follow_up_resolution", True, structured)
+    return structured
+
+
+def _resolve_pending_store_location_follow_up(message: str, context: dict) -> StructuredIntent | None:
+    pending_product_id = context.get("pending_store_availability_product_id")
+    if not pending_product_id:
+        return None
+
+    location = _parse_requested_store_name(message) or _parse_zip_location(message) or (message or "").strip()
+    if not location:
+        return None
+
+    product = _resolve_context_product(message, context)
+    if product is None or product == "ambiguous":
+        for candidate in context.get("active_selected_products") or []:
+            if candidate.get("product_id") == pending_product_id:
+                product = candidate
+                break
+    if not isinstance(product, dict):
+        return None
+
+    size = context.get("requested_size")
+    color = context.get("requested_color")
+    product_name = product.get("name") or context.get("active_product_name") or product["product_id"]
+    text = f"Check pickup availability for product_id {product['product_id']} ({product_name}) at {location}"
+    if size:
+        text += f" in size {size}"
+    if color:
+        text += f" color {color}"
+    text += "."
+
+    context["requested_store"] = location
+    context["pending_store_availability_product_id"] = None
+    structured = StructuredIntent(
+        text=text,
+        request_type="store_availability",
+        confidence=0.96,
+        product_type=context.get("active_category"),
+        size=size,
+        color=color,
+        location=location,
+        product_id=product["product_id"],
+        fulfillment_preference="pickup",
+        extraction_source="deterministic_store_location_follow_up",
+    )
+    _record_context_resolution("pending_store_location_follow_up", True, structured)
     return structured
 
 
@@ -620,6 +670,11 @@ def _parse_requested_color(customer_message: str) -> str | None:
 def _parse_requested_store_name(customer_message: str) -> str | None:
     match = re.search(r"\b(?:at|in|near)\s+([A-Z][A-Za-z]*(?:\s+[A-Z][A-Za-z]*){0,3})\b", customer_message or "")
     return match.group(1).strip() if match else None
+
+
+def _parse_zip_location(customer_message: str) -> str | None:
+    match = re.fullmatch(r"\s*(\d{5})(?:-\d{4})?\s*", customer_message or "")
+    return match.group(1) if match else None
 
 
 def _parse_requested_size(customer_message: str) -> str | None:

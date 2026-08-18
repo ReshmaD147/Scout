@@ -3,7 +3,6 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useSavedItems } from "../context/SavedItemsContext";
 import { useChatWidget } from "../context/ChatWidgetContext";
-import { useAuth } from "../context/AuthContext";
 import ChatWidget from "./ChatWidget";
 import CartToast from "./CartToast";
 import "./Layout.css";
@@ -78,10 +77,8 @@ function ShieldIcon() {
 export default function Layout() {
   const { itemCount, total } = useCart();
   const { count: savedCount } = useSavedItems();
-  const { setIsOpen: setChatOpen } = useChatWidget();
-  const { isSignedIn, customerId, signingIn, signInAsDemoCustomer, signOut } = useAuth();
+  const { isOpen: isChatOpen, setIsOpen: setChatOpen } = useChatWidget();
   const [searchInput, setSearchInput] = useState("");
-  const [accountOpen, setAccountOpen] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
 
@@ -97,8 +94,14 @@ export default function Layout() {
     return location.pathname === catPath;
   }
 
+  const isProductPage = location.pathname.startsWith("/product/");
+  const layoutClasses = [
+    "layout",
+    isProductPage && isChatOpen ? "layout--product-chat-open" : "",
+  ].filter(Boolean).join(" ");
+
   return (
-    <div className="layout">
+    <div className={layoutClasses}>
       <header className="layout-header">
         <Link to="/" className="layout-logo">
           <span className="layout-logo-mark">L</span>
@@ -125,59 +128,25 @@ export default function Layout() {
           </Link>
 
           <div className="layout-account-wrap">
-            <button
+            <Link
               className="layout-action-btn"
-              aria-label="Account menu"
-              aria-expanded={accountOpen}
-              aria-haspopup="true"
-              onClick={() => setAccountOpen((o) => !o)}
+              aria-label="Account page"
+              to="/account"
             >
               <span className="layout-action-icon">
                 <UserIcon />
               </span>
               <span className="layout-action-label">Account</span>
-            </button>
-            {accountOpen && (
-              <div className="layout-account-dropdown">
-                <p className="layout-account-title">Your Lumi account</p>
-                {isSignedIn ? (
-                  <>
-                    <p className="layout-account-subtitle">
-                      Signed in as demo customer {customerId}.
-                    </p>
-                    <button className="layout-account-signin-btn" onClick={signOut}>
-                      Sign out
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <p className="layout-account-subtitle">
-                      Sign in to track orders, save items, and get personalized help.
-                    </p>
-                    <button
-                      className="layout-account-signin-btn"
-                      disabled={signingIn}
-                      onClick={() => signInAsDemoCustomer("C001")}
-                    >
-                      {signingIn ? "Signing in..." : "Sign in as demo customer"}
-                    </button>
-                    <p className="layout-account-note">
-                      (Demo sign-in - authenticates as a real, seeded customer to
-                      show order/shipment lookup.)
-                    </p>
-                  </>
-                )}
-              </div>
-            )}
+            </Link>
           </div>
 
           <button
             className="layout-help-btn"
             onClick={() => setChatOpen(true)}
-            aria-label="Open shopping assistant"
+            aria-label="Ask Scout shopping assistant"
           >
             <ChatIcon />
-            <span className="layout-action-label">Need help?</span>
+            <span className="layout-action-label">Ask Scout</span>
           </button>
 
           <Link to="/cart" className="layout-cart-btn" aria-label={`Cart, ${itemCount} items, subtotal $${total.toFixed(2)}`}>

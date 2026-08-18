@@ -179,6 +179,39 @@ def test_nearby_store_followup_without_location_asks_for_location(monkeypatch):
     assert products == []
     assert app.graph_calls == 0
     assert app.scout_specialists["inventory_agent"].calls == 0
+    assert context["pending_store_availability_product_id"] == "P001"
+
+
+def test_zip_reply_continues_pending_nearby_store_check(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P001",
+        "active_product_name": "Black Midi Dress",
+        "active_selected_products": [{"product_id": "P001", "name": "Black Midi Dress"}],
+        "requested_size": "M",
+        "requested_color": "black",
+        "pending_store_availability_product_id": "P001",
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Store verified."))
+
+    asyncio.run(
+        supervisor.ask(app, [], "55678", conversation_context=context)
+    )
+
+    assert captured == {
+        "tool_name": "stores",
+        "args": {"product_id": "P001", "store_name": "55678", "size": "M", "color": "black"},
+        "agent_name": "inventory_agent",
+    }
+    assert context["requested_store"] == "55678"
+    assert context["pending_store_availability_product_id"] is None
 
 
 def test_named_store_followup_preserves_exact_variant(monkeypatch):

@@ -4,6 +4,7 @@ import { useCart } from "../context/CartContext";
 import { useSavedItems } from "../context/SavedItemsContext";
 import ProductCard from "../components/ProductCard";
 import { formatCurrency, getPromotionPresentation } from "../components/ProductCard.helpers";
+import { formatProductDisplayName } from "../components/productDisplay";
 import {
   formatVariantLabel,
   getUniqueVariantValues,
@@ -143,16 +144,25 @@ export default function ProductDetailPage() {
   };
   if (!variantOptions.sizes.length) variantOptions.sizes = fallbackVariantOptions.sizes;
   if (!variantOptions.colors.length) variantOptions.colors = fallbackVariantOptions.colors;
+  const selectedStockVariants = variantStock?.variants?.length
+    ? variantStock.variants
+    : [{
+      size: selectedSize,
+      color: selectedColor,
+      quantity: variantStock?.total_quantity || 0,
+      in_stock: Boolean(variantStock?.in_stock),
+    }];
   const stockProduct = variantStock?.product_id === product.product_id
     && variantStock?.requested_size === selectedSize
     && String(variantStock?.requested_color || "").toLowerCase() === String(selectedColor || "").toLowerCase()
-    ? { ...product, variants: variantStock.variants || [] }
+    ? { ...product, variants: selectedStockVariants }
     : product;
   const availability = getVariantAvailability(stockProduct, selectedSize, selectedColor, quantity);
   const usesVariantInventory = Boolean((product.variants || []).length);
   const canAddToCart = availability.canAddToCart;
   const promotionPresentation = getPromotionPresentation(product);
   const detailBullets = getDetailBullets(product);
+  const displayName = formatProductDisplayName(product.name);
 
   async function handleAddToCart() {
     setCartError("");
@@ -178,17 +188,17 @@ export default function ProductDetailPage() {
           </>
         )}
         <span>/</span>
-        <span>{product.name}</span>
+        <span>{displayName}</span>
       </nav>
 
       <div className="product-detail">
         <div className="product-detail-image">
-          <img src={resolveImageUrl(product.image_url)} alt={product.name} />
+          <img src={resolveImageUrl(product.image_url)} alt={displayName} />
         </div>
 
         <div className="product-detail-info">
           <p className="product-detail-brand">{product.brand}</p>
-          <h1 className="product-detail-name">{product.name}</h1>
+          <h1 className="product-detail-name">{displayName}</h1>
 
           {typeof product.rating === "number" && product.rating > 0 && (
             <div className="product-detail-rating">

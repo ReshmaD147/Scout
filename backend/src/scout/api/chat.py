@@ -9,6 +9,16 @@ from scout.agents.attribution import apply_attribution_and_cart_offer
 from scout.agents.supervisor import ask, ask_streaming, SPECIALIST_NAMES
 from scout.config import settings
 from scout.services.chat_feedback_service import record_chat_feedback
+from scout.services.recommendation_feedback_service import (
+    list_recommendation_feedback,
+    record_recommendation_feedback,
+)
+from scout.db.session import SessionLocal
+from scout.services.order_service import (
+    get_shipment_for_customer,
+    list_orders_for_authenticated_customer,
+)
+from scout.repositories.product_repository import ProductRepository
 
 router = APIRouter()
 
@@ -66,6 +76,35 @@ class ChatFeedbackResponse(BaseModel):
     feedback_id: str
 
 
+class RecommendationFeedbackRequest(BaseModel):
+    product_id: str
+    rating: str
+    session_id: str | None = None
+    customer_id: str | None = None
+    recommendation_id: str | None = None
+
+    @field_validator("product_id")
+    @classmethod
+    def product_id_required(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("product_id is required")
+        return value
+
+    @field_validator("rating")
+    @classmethod
+    def recommendation_rating_supported(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"up", "down"}:
+            raise ValueError("rating must be up or down")
+        return normalized
+
+
+class RecommendationFeedbackResponse(BaseModel):
+    status: str
+    feedback_id: str
+    rating: str
+
+
 class DemoAuthRequest(BaseModel):
     customer_id: str
     session_id: str | None = None
@@ -79,6 +118,17 @@ class DemoAuthResponse(BaseModel):
     session_id: str
     authenticated_customer_id: str | None = None
     demo_auth_enabled: bool
+
+
+class AccountSummaryRequest(BaseModel):
+    session_id: str
+
+    @field_validator("session_id")
+    @classmethod
+    def account_session_id_required(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("session_id is required")
+        return value
 
 
 @router.post("/demo-auth/sign-in", response_model=DemoAuthResponse)
@@ -118,6 +168,55 @@ async def demo_auth_sign_out(body: DemoAuthSignOutRequest) -> DemoAuthResponse:
     )
 
 
+@router.post("/account/summary")
+async def account_summary(body: AccountSummaryRequest) -> dict:
+    context = SESSION_CONTEXTS.get(body.session_id) or {}
+    customer_id = context.get("authenticated_customer_id")
+    if not customer_id:
+        raise HTTPException(status_code=401, detail="Sign in to view account details.")
+
+    session = SessionLocal()
+    try:
+        product_repo = ProductRepository(session)
+        orders_result = list_orders_for_authenticated_customer(
+            session,
+            authenticated_customer_id=customer_id,
+        )
+        orders = orders_result.get("orders", [])
+        for order in orders:
+            shipment = get_shipment_for_customer(
+                session,
+                order["order_id"],
+                authenticated_customer_id=customer_id,
+            )
+            order["shipment"] = shipment if shipment.get("authorized") else None
+        latest_email = next(
+            (order.get("contact_email") for order in orders if order.get("contact_email")),
+            None,
+        )
+        feedback = list_recommendation_feedback(
+            session_id=body.session_id,
+            customer_id=customer_id,
+        )
+        for item in feedback:
+            product = product_repo.get_by_id(item["product_id"])
+            if product:
+                item["product_name"] = product.name
+    finally:
+        session.close()
+
+    return {
+        "customer": {
+            "customer_id": customer_id,
+            "name": f"Demo Customer {customer_id[-1]}" if customer_id[-1:].isdigit() else "Demo Customer",
+            "email": latest_email or f"{customer_id.lower()}@demo.lumi.local",
+            "demo_identity": True,
+        },
+        "orders": orders,
+        "recommendation_feedback": feedback,
+    }
+
+
 @router.post("/chat", response_model=ChatResponse)
 async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     session_id = body.session_id or str(uuid.uuid4())
@@ -130,6 +229,7 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
         history,
         body.message,
         conversation_context=conversation_context,
+        session_id=session_id,
     )
 
     SESSION_HISTORIES[session_id] = updated_history
@@ -157,6 +257,25 @@ async def chat_feedback(body: ChatFeedbackRequest) -> ChatFeedbackResponse:
         products=body.products,
     )
     return ChatFeedbackResponse(status="ok", feedback_id=feedback_id)
+
+
+@router.post("/recommendations/feedback", response_model=RecommendationFeedbackResponse)
+async def recommendation_feedback(body: RecommendationFeedbackRequest) -> RecommendationFeedbackResponse:
+    try:
+        feedback = record_recommendation_feedback(
+            product_id=body.product_id,
+            rating=body.rating,
+            session_id=body.session_id,
+            customer_id=body.customer_id,
+            recommendation_id=body.recommendation_id,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    return RecommendationFeedbackResponse(
+        status="ok",
+        feedback_id=feedback.feedback_id,
+        rating=feedback.rating,
+    )
 
 
 @router.post("/chat/stream")

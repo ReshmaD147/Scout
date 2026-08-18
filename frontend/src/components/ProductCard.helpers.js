@@ -1,3 +1,5 @@
+import { formatProductDisplayName } from "./productDisplay";
+
 const API_BASE = import.meta.env?.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export function resolveImageUrl(url) {
@@ -50,7 +52,7 @@ export function getPromotionPresentation(product) {
 }
 
 export function getImagePresentation(product, imageFailed = false) {
-  const name = product?.name || "this product";
+  const name = formatProductDisplayName(product?.name) || "this product";
   const imageUrl = imageFailed ? "" : resolveImageUrl(product?.image_url);
   if (imageUrl) {
     return {
@@ -106,5 +108,5 @@ export function getAvailabilityPresentation(product) {
     return { text: "Out of stock", status: "unavailable" };
   }
 
-  return { text: "Check availability", status: "unchecked" };
+  return { text: "Availability varies by location", status: "unchecked" };
 }

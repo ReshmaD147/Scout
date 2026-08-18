@@ -33,12 +33,47 @@ def _cart_items():
     }]
 
 
-def _payment_metadata(session_id=None, items=None):
+def _address():
+    return checkout_api.CheckoutAddress(
+        full_name="Rita Dangol",
+        address_line1="123 Main St",
+        address_line2="Apt 4",
+        city="Minneapolis",
+        state="MN",
+        postal_code="55401",
+        country="US",
+    )
+
+
+def _request(items=None, session_id=None):
+    return checkout_api.CheckoutRequest(
+        items=items or [_item()],
+        session_id=session_id,
+        contact_email="rita@example.com",
+        shipping_address=_address(),
+        billing_same_as_shipping=True,
+    )
+
+
+def _finalize_request(payment_intent_id="pi_test", items=None, session_id=None):
+    return checkout_api.CheckoutFinalizeRequest(
+        payment_intent_id=payment_intent_id,
+        items=items or [_item()],
+        session_id=session_id,
+        contact_email="rita@example.com",
+        shipping_address=_address(),
+        billing_same_as_shipping=True,
+    )
+
+
+def _payment_metadata(session_id=None, items=None, request=None):
+    request = request or _request(items=items, session_id=session_id)
     return {
         "order_id": "OTEST",
         "cart_fingerprint": checkout_api._cart_fingerprint(
-            items or [_item()],
+            request.items,
             session_id=session_id,
+            checkout_details=request,
         ),
     }
 
@@ -65,11 +100,36 @@ def test_checkout_start_creates_payment_intent_without_creating_order(monkeypatc
 
     monkeypatch.setattr(checkout_api, "create_order", fail_if_called)
 
-    result = checkout_api.checkout(checkout_api.CheckoutRequest(items=[_item()]))
+    result = checkout_api.checkout(_request())
 
     assert result["success"] is True
     assert result["total"] == 67.99
     assert "order" not in result
+
+
+def test_checkout_start_passes_receipt_email_to_stripe(monkeypatch):
+    monkeypatch.setattr(checkout_api, "SessionLocal", FakeSession)
+    monkeypatch.setattr(
+        checkout_api,
+        "_validated_cart_items",
+        lambda session, items, recommendation_session_id=None: (_cart_items(), None),
+    )
+    captured = {}
+
+    def fake_payment(**kwargs):
+        captured.update(kwargs)
+        return {
+            "payment_intent_id": "pi_test",
+            "client_secret": "secret",
+            "status": "requires_payment_method",
+        }
+
+    monkeypatch.setattr(checkout_api, "create_test_payment", fake_payment)
+
+    result = checkout_api.checkout(_request())
+
+    assert result["success"] is True
+    assert captured["receipt_email"] == "rita@example.com"
 
 
 def test_recommendation_validation_is_bound_to_registered_session():
@@ -178,10 +238,7 @@ def test_finalize_rejects_unconfirmed_payment_without_creating_order(monkeypatch
     monkeypatch.setattr(checkout_api, "create_order", fail_if_called)
 
     result = checkout_api.finalize_checkout(
-        checkout_api.CheckoutFinalizeRequest(
-            payment_intent_id="pi_test",
-            items=[_item()],
-        )
+        _finalize_request()
     )
 
     assert result == {
@@ -212,10 +269,7 @@ def test_finalize_rejects_attribution_changed_after_payment_started(monkeypatch)
     monkeypatch.setattr(checkout_api, "create_order", fail_if_called)
 
     result = checkout_api.finalize_checkout(
-        checkout_api.CheckoutFinalizeRequest(
-            payment_intent_id="pi_test",
-            items=[_attributed_item(recommendation_id, "sess_attr")],
-        )
+        _finalize_request(items=[_attributed_item(recommendation_id, "sess_attr")])
     )
 
     assert result == {
@@ -238,6 +292,7 @@ def test_finalize_uses_request_session_for_attribution(monkeypatch):
             "currency": "usd",
             "status": "succeeded",
             "metadata": _payment_metadata(session_id="sess_owner", items=[checkout_item]),
+            "receipt_email": "rita@example.com",
         },
     )
     monkeypatch.setattr(checkout_api, "get_order", lambda session, order_id: None)
@@ -270,11 +325,7 @@ def test_finalize_uses_request_session_for_attribution(monkeypatch):
     monkeypatch.setattr(checkout_api, "create_order", fake_create_order)
 
     result = checkout_api.finalize_checkout(
-        checkout_api.CheckoutFinalizeRequest(
-            payment_intent_id="pi_test",
-            items=[checkout_item],
-            session_id="sess_owner",
-        )
+        _finalize_request(items=[checkout_item], session_id="sess_owner")
     )
 
     assert result["success"] is True
@@ -295,6 +346,7 @@ def test_finalize_creates_processing_order_after_verified_payment(monkeypatch):
             "currency": "usd",
             "status": "succeeded",
             "metadata": _payment_metadata(),
+            "receipt_email": "rita@example.com",
         },
     )
     monkeypatch.setattr(checkout_api, "get_order", lambda session, order_id: None)
@@ -312,13 +364,13 @@ def test_finalize_creates_processing_order_after_verified_payment(monkeypatch):
     monkeypatch.setattr(checkout_api, "create_order", fake_create_order)
 
     result = checkout_api.finalize_checkout(
-        checkout_api.CheckoutFinalizeRequest(
-            payment_intent_id="pi_test",
-            items=[_item()],
-        )
+        _finalize_request()
     )
 
     assert result["success"] is True
     assert captured["order_id"] == "OTEST"
     assert captured["status"] == "processing"
+    assert captured["checkout_details"]["contact_email"] == "rita@example.com"
+    assert captured["checkout_details"]["shipping_city"] == "Minneapolis"
+    assert captured["checkout_details"]["stripe_receipt_email"] == "rita@example.com"
     assert "_computed_price" not in captured["cart_items"][0]

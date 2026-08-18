@@ -81,6 +81,20 @@ export async function sendChatFeedback(feedback) {
   return response.json();
 }
 
+export async function sendRecommendationFeedback(feedback) {
+  const response = await fetch(`${BASE_URL}/recommendations/feedback`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(feedback),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Recommendation feedback request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
 export async function addToCartRequest(productId, quantity = 1, options = {}) {
   const payload = {
     product_id: productId,
@@ -114,6 +128,20 @@ export async function getScoutImpact() {
 
   if (!response.ok) {
     throw new Error(`Scout impact request failed: ${response.status}`);
+  }
+
+  return response.json();
+}
+
+export async function getAccountSummary(sessionId) {
+  const response = await fetch(`${BASE_URL}/account/summary`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ session_id: sessionId }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`Account request failed: ${response.status}`);
   }
 
   return response.json();

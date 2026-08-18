@@ -7,6 +7,7 @@ from scout.repositories.product_repository import ProductRepository
 from scout.repositories.promotion_repository import PromotionRepository
 from scout.services.product_service import check_stock
 from scout.services.cache import ttl_cache
+from scout.services.recommendation_feedback_service import feedback_adjustment_for_product
 
 # ─────────────────────────────────────────────────────────
 # SCORING WEIGHTS
@@ -81,7 +82,10 @@ def rank_products(
     session: Session,
     candidate_product_ids: list[str],
     target_price: Optional[float] = None,
+    max_price: Optional[float] = None,
     top_n: int = 3,
+    session_id: str | None = None,
+    customer_id: str | None = None,
 ) -> list[dict]:
     """Score and rank a list of semantic-search candidate product IDs,
     filtering out anything not currently in stock, and return the top N
@@ -95,6 +99,8 @@ def rank_products(
         product = product_repo.get_by_id(product_id)
         if not product:
             continue
+        if max_price is not None and product.price > max_price:
+            continue
 
         stock_info = check_stock(session, product_id)
         if not stock_info["in_stock"]:
@@ -102,6 +108,12 @@ def rank_products(
 
         promotion = _get_active_promotion(session, product)
         score = _score_candidate(product, position, total, target_price, promotion)
+        score += feedback_adjustment_for_product(
+            session,
+            product_id=product.product_id,
+            session_id=session_id,
+            customer_id=customer_id,
+        )
 
         result = {
             "product_id": product.product_id,

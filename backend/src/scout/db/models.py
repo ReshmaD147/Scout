@@ -65,6 +65,24 @@ class Order(Base):
     order_id: Mapped[str] = mapped_column(String, primary_key=True)
     customer_id: Mapped[str] = mapped_column(String, nullable=False)
     status: Mapped[str] = mapped_column(String, default="pending")
+    contact_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_address_line1: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_address_line2: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_city: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_state: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_postal_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    shipping_country: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_name: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_address_line1: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_address_line2: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_city: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_state: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_postal_code: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_country: Mapped[str | None] = mapped_column(String, nullable=True)
+    billing_same_as_shipping: Mapped[bool] = mapped_column(Boolean, default=True)
+    stripe_receipt_email: Mapped[str | None] = mapped_column(String, nullable=True)
+    stripe_receipt_status: Mapped[str | None] = mapped_column(String, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
     )
@@ -167,4 +185,25 @@ class ChatFeedback(Base):
     products_json: Mapped[str] = mapped_column(Text, default="[]")
     created_at: Mapped[datetime] = mapped_column(
         DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+
+
+class RecommendationFeedback(Base):
+    __tablename__ = "recommendation_feedback"
+
+    feedback_id: Mapped[str] = mapped_column(
+        String, primary_key=True, default=lambda: str(uuid.uuid4())
+    )
+    session_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    customer_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    recommendation_id: Mapped[str | None] = mapped_column(String, nullable=True)
+    product_id: Mapped[str] = mapped_column(String, nullable=False)
+    rating: Mapped[str] = mapped_column(String, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=lambda: datetime.now(timezone.utc)
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime,
+        default=lambda: datetime.now(timezone.utc),
+        onupdate=lambda: datetime.now(timezone.utc),
     )

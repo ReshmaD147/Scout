@@ -2,6 +2,7 @@ import uuid
 from datetime import datetime, timezone
 from typing import Optional
 
+from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session
 
 from scout.repositories.order_repository import OrderRepository
@@ -11,6 +12,34 @@ from scout.services.product_service import _get_active_promotion_dict
 
 AUTH_REQUIRED_ERROR = "authentication_required"
 UNAUTHORIZED_ORDER_ERROR = "order_access_denied"
+
+ORDER_CHECKOUT_DETAIL_COLUMNS = {
+    "contact_email": "VARCHAR",
+    "shipping_name": "VARCHAR",
+    "shipping_address_line1": "VARCHAR",
+    "shipping_address_line2": "VARCHAR",
+    "shipping_city": "VARCHAR",
+    "shipping_state": "VARCHAR",
+    "shipping_postal_code": "VARCHAR",
+    "shipping_country": "VARCHAR",
+    "billing_name": "VARCHAR",
+    "billing_address_line1": "VARCHAR",
+    "billing_address_line2": "VARCHAR",
+    "billing_city": "VARCHAR",
+    "billing_state": "VARCHAR",
+    "billing_postal_code": "VARCHAR",
+    "billing_country": "VARCHAR",
+    "billing_same_as_shipping": "BOOLEAN DEFAULT 1",
+    "stripe_receipt_email": "VARCHAR",
+    "stripe_receipt_status": "VARCHAR",
+}
+
+
+def ensure_order_checkout_columns(session: Session) -> None:
+    existing = {column["name"] for column in inspect(session.bind).get_columns("orders")}
+    for column_name, column_type in ORDER_CHECKOUT_DETAIL_COLUMNS.items():
+        if column_name not in existing:
+            session.execute(text(f"ALTER TABLE orders ADD COLUMN {column_name} {column_type}"))
 
 
 def _order_access_denied(order_id: str | None = None, *, reason: str = AUTH_REQUIRED_ERROR) -> dict:
@@ -47,12 +76,35 @@ def _order_to_dict(order_id: str, session: Session) -> dict:
         "customer_id": order.customer_id,
         "status": order.status,
         "created_at": order.created_at.isoformat(),
+        "contact_email": order.contact_email,
+        "shipping_address": {
+            "full_name": order.shipping_name,
+            "address_line1": order.shipping_address_line1,
+            "address_line2": order.shipping_address_line2,
+            "city": order.shipping_city,
+            "state": order.shipping_state,
+            "postal_code": order.shipping_postal_code,
+            "country": order.shipping_country,
+        },
+        "billing_address": {
+            "full_name": order.billing_name,
+            "address_line1": order.billing_address_line1,
+            "address_line2": order.billing_address_line2,
+            "city": order.billing_city,
+            "state": order.billing_state,
+            "postal_code": order.billing_postal_code,
+            "country": order.billing_country,
+        },
+        "billing_same_as_shipping": order.billing_same_as_shipping,
+        "stripe_receipt_email": order.stripe_receipt_email,
+        "stripe_receipt_status": order.stripe_receipt_status,
         "items": item_list,
         "total": round(sum(i["quantity"] * i["price_at_purchase"] for i in item_list), 2),
     }
 
 
 def get_order(session: Session, order_id: str) -> Optional[dict]:
+    ensure_order_checkout_columns(session)
     order_repo = OrderRepository(session)
     order = order_repo.get_by_id(order_id)
     return _order_to_dict(order_id, session) if order else None
@@ -67,6 +119,7 @@ def get_order_for_customer(session: Session, order_id: str, authenticated_custom
     if not authenticated_customer_id:
         return _order_access_denied(order_id)
 
+    ensure_order_checkout_columns(session)
     order_repo = OrderRepository(session)
     order = order_repo.get_by_id(order_id)
     if not order:
@@ -119,6 +172,7 @@ def get_shipment_for_customer(session: Session, order_id: str, authenticated_cus
 
 
 def list_orders_for_customer(session: Session, customer_id: str) -> list[dict]:
+    ensure_order_checkout_columns(session)
     order_repo = OrderRepository(session)
     orders = order_repo.find_by_customer(customer_id)
     return [_order_to_dict(o.order_id, session) for o in orders]
@@ -141,19 +195,26 @@ def create_order(
     cart_items: list[dict],
     order_id: str | None = None,
     status: str = "pending",
+    checkout_details: dict | None = None,
 ) -> dict:
     """Business logic: prices are always looked up server-side from the
     real product record — never trusted from the caller. This remains
     true regardless of the repository refactor."""
     order_repo = OrderRepository(session)
     product_repo = ProductRepository(session)
+    ensure_order_checkout_columns(session)
 
     order_id = order_id or f"O{uuid.uuid4().hex[:8].upper()}"
     existing_order = order_repo.get_by_id(order_id)
     if existing_order:
         return get_order(session, order_id)
 
-    order_repo.create(order_id=order_id, customer_id=customer_id, status=status)
+    order_repo.create(
+        order_id=order_id,
+        customer_id=customer_id,
+        status=status,
+        checkout_details=checkout_details,
+    )
 
     for item in cart_items:
         product = product_repo.get_by_id(item["product_id"])

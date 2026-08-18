@@ -23,6 +23,10 @@ _AUTHENTICATED_CUSTOMER_ID: ContextVar[str | None] = ContextVar(
     "scout_authenticated_customer_id",
     default=None,
 )
+_RECOMMENDATION_SESSION_ID: ContextVar[str | None] = ContextVar(
+    "scout_recommendation_session_id",
+    default=None,
+)
 
 
 def set_authenticated_customer_id(customer_id: str | None):
@@ -33,9 +37,22 @@ def reset_authenticated_customer_id(token) -> None:
     _AUTHENTICATED_CUSTOMER_ID.reset(token)
 
 
+def set_recommendation_session_id(session_id: str | None):
+    return _RECOMMENDATION_SESSION_ID.set(session_id)
+
+
+def reset_recommendation_session_id(token) -> None:
+    _RECOMMENDATION_SESSION_ID.reset(token)
+
+
 def _authenticated_customer_id() -> str | None:
     customer_id = _AUTHENTICATED_CUSTOMER_ID.get()
     return customer_id if isinstance(customer_id, str) and customer_id.strip() else None
+
+
+def _recommendation_session_id() -> str | None:
+    session_id = _RECOMMENDATION_SESSION_ID.get()
+    return session_id if isinstance(session_id, str) and session_id.strip() else None
 
 
 def _to_float(value, default: float = 0) -> float:
@@ -226,7 +243,10 @@ def recommend_products(
             session,
             candidate_product_ids=candidates,
             target_price=target_price,
+            max_price=target_price,
             top_n=int(_to_float(top_n, 3)),
+            session_id=_recommendation_session_id(),
+            customer_id=_authenticated_customer_id(),
         )
     finally:
         session.close()

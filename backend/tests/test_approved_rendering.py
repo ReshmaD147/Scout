@@ -436,6 +436,29 @@ def test_size_availability_renders_request_specific_available_and_unavailable():
     )
 
 
+def test_size_availability_combines_multiple_sizes_naturally():
+    claims = [
+        claim(ClaimType.PRODUCT_IDENTITY, claim_id="cl_name", subject_id="P001", field="name", value="Black Midi Dress", source_agent="inventory_agent"),
+        claim(ClaimType.INVENTORY_QUANTITY, claim_id="cl_qty_s", subject_id="product:P001:size:S:color:black", field="quantity", value=3, source_agent="inventory_agent"),
+        claim(ClaimType.INVENTORY_AVAILABILITY, claim_id="cl_stock_m", subject_id="product:P001:size:M:color:black", field="in_stock", value=False, source_agent="inventory_agent"),
+        claim(ClaimType.INVENTORY_QUANTITY, claim_id="cl_qty_l", subject_id="product:P001:size:L:color:black", field="quantity", value=3, source_agent="inventory_agent"),
+    ]
+
+    reply, products = render_verified_response(
+        original_reply="Raw says small and large are available but medium is out.",
+        products=[],
+        proposed_claims=claims,
+        verification_result=result(["cl_name", "cl_qty_s", "cl_stock_m", "cl_qty_l"]),
+        customer_message="Check size availability for Black Midi Dress",
+    )
+
+    assert reply == (
+        "The Black Midi Dress in black: small has 3 units and large has 3 units available, "
+        "but medium is out of stock. Want me to check nearby stores or find a similar option?"
+    )
+    assert products == []
+
+
 def test_store_availability_renders_request_specific_answer_without_price_replacement():
     claims = [
         claim(ClaimType.PRODUCT_IDENTITY, claim_id="cl_name", subject_id="P001", field="name", value="Black Midi Dress", source_agent="inventory_agent"),

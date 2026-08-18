@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from "react";
 import { Link, useLocation } from "react-router-dom";
-import { sendChatFeedback, streamChatMessage } from "../api/client";
+import { sendChatFeedback, sendRecommendationFeedback, streamChatMessage } from "../api/client";
 import { useChatWidget } from "../context/ChatWidgetContext";
 import { useCart } from "../context/CartContext";
 import { useAuth } from "../context/AuthContext";
@@ -9,18 +9,11 @@ import {
   getImagePresentation,
   getPromotionPresentation,
 } from "./ProductCard.helpers";
+import { formatProductDisplayName } from "./productDisplay";
 import ReactMarkdown from "react-markdown";
 import "./ChatWidget.css";
 
 // Small inline icons matching the reference design, one per starter prompt
-function ShoeIcon() {
-  return (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2 15c0-1.5 1-2.5 2.5-3l6-2.3c1-.4 1.7-1.3 1.8-2.4L12.5 5c.2-1.5 1.5-2 2.5-1l1 1c.6.6 1.4 1 2.3 1H20a2 2 0 0 1 2 2v3.5c0 2-1.5 3.5-3.5 3.5H4c-1.1 0-2-.9-2-2z" />
-    </svg>
-  );
-}
-
 function DressIcon() {
   return (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -83,13 +76,8 @@ function FeedbackIcon({ direction }) {
 
 const STARTER_PROMPTS = [
   { text: "Recommend a dress under $80", Icon: DressIcon },
-  { text: "Is the black midi dress in a medium?", Icon: StoreIcon },
+  { text: "Is the black dress available in medium?", Icon: StoreIcon },
   { text: "Where is order O1001?", Icon: CompareIcon },
-  {
-    text: "Recommend a black dress under $80, check Maple Grove medium availability, and explain opened-item returns.",
-    Icon: DressIcon,
-  },
-  { text: "Do you have any red cocktail dresses under $50?", Icon: ShoeIcon },
 ];
 
 // Maps real backend progress event values to human-readable labels.
@@ -113,7 +101,7 @@ function productKey(product) {
   return product.product_id || product.external_product_id || product.name;
 }
 
-function ChatProductRail({ products, onInternalProductClick }) {
+function ChatProductRail({ products, onInternalProductClick, sessionId, customerId }) {
   const title = products.some((product) => product.source === "external")
     ? "Outside options"
     : "Recommended for you";
@@ -127,6 +115,8 @@ function ChatProductRail({ products, onInternalProductClick }) {
             key={productKey(product)}
             product={product}
             onInternalProductClick={onInternalProductClick}
+            sessionId={sessionId}
+            customerId={customerId}
           />
         ))}
       </div>
@@ -134,9 +124,10 @@ function ChatProductRail({ products, onInternalProductClick }) {
   );
 }
 
-function ChatProductCard({ product, onInternalProductClick }) {
+function ChatProductCard({ product, onInternalProductClick, sessionId, customerId }) {
   const [imageFailed, setImageFailed] = useState(false);
   const [addState, setAddState] = useState("idle"); // idle | adding | added
+  const [recommendationFeedback, setRecommendationFeedback] = useState(null);
   const { addToCart } = useCart();
   const imagePresentation = getImagePresentation(product, imageFailed);
   const promotionPresentation = getPromotionPresentation(product);
@@ -158,10 +149,30 @@ function ChatProductCard({ product, onInternalProductClick }) {
       setAddState("idle");
     }
   };
+  const handleRecommendationFeedback = async (event, rating) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (isExternal || !product.product_id || (!sessionId && !customerId)) return;
+    const previousFeedback = recommendationFeedback;
+    setRecommendationFeedback(rating);
+    try {
+      await sendRecommendationFeedback({
+        product_id: product.product_id,
+        recommendation_id: product.recommendation_id,
+        session_id: sessionId,
+        customer_id: customerId,
+        rating,
+      });
+    } catch (e) {
+      console.warn("Failed to save recommendation feedback:", e);
+      setRecommendationFeedback(previousFeedback);
+    }
+  };
   const destination = isExternal
     ? resolveExternalUrl(product.click_url)
     : `/product/${product.product_id}`;
   const price = promotionPresentation.salePrice || product.price;
+  const displayName = formatProductDisplayName(product.name);
   const cardContent = (
     <>
       <div className="chat-widget-product-image">
@@ -181,7 +192,7 @@ function ChatProductCard({ product, onInternalProductClick }) {
         <p className="chat-widget-product-brand">
           {isExternal ? product.vendor_name : product.brand || "Our catalog"}
         </p>
-        <p className="chat-widget-product-name">{product.name}</p>
+        <p className="chat-widget-product-name">{displayName}</p>
         <div className="chat-widget-product-price-row">
           {promotionPresentation.hasPromotion && promotionPresentation.originalPrice && (
             <span className="chat-widget-product-price chat-widget-product-price--original">
@@ -202,14 +213,38 @@ function ChatProductCard({ product, onInternalProductClick }) {
         </span>
         {isExternal && <span className="chat-widget-product-affiliate">Affiliate link</span>}
         {!isExternal && (
-          <button
-            type="button"
-            className="chat-widget-product-add-btn"
-            onClick={handleAddToCart}
-            disabled={addState !== "idle"}
-          >
-            {addState === "adding" ? "Adding…" : addState === "added" ? "Added ✓" : "Add to Cart"}
-          </button>
+          <div className="chat-widget-product-actions">
+            <button
+              type="button"
+              className="chat-widget-product-add-btn"
+              onClick={handleAddToCart}
+              disabled={addState !== "idle"}
+            >
+              {addState === "adding" ? "Adding…" : addState === "added" ? "Added ✓" : "Add to Cart"}
+            </button>
+            <div className="chat-widget-product-feedback" aria-label={`Feedback for ${displayName}`}>
+              <button
+                type="button"
+                className={`chat-widget-product-feedback-btn ${recommendationFeedback === "up" ? "chat-widget-product-feedback-btn--active" : ""}`}
+                onClick={(event) => handleRecommendationFeedback(event, "up")}
+                aria-label={`Like ${displayName} recommendation`}
+                aria-pressed={recommendationFeedback === "up"}
+                disabled={!sessionId && !customerId}
+              >
+                👍
+              </button>
+              <button
+                type="button"
+                className={`chat-widget-product-feedback-btn ${recommendationFeedback === "down" ? "chat-widget-product-feedback-btn--active" : ""}`}
+                onClick={(event) => handleRecommendationFeedback(event, "down")}
+                aria-label={`Dislike ${displayName} recommendation`}
+                aria-pressed={recommendationFeedback === "down"}
+                disabled={!sessionId && !customerId}
+              >
+                👎
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </>
@@ -222,7 +257,7 @@ function ChatProductCard({ product, onInternalProductClick }) {
         href={destination}
         target="_blank"
         rel="noopener noreferrer sponsored"
-        aria-label={`View ${product.name} at ${product.vendor_name}`}
+        aria-label={`View ${displayName} at ${product.vendor_name}`}
       >
         {cardContent}
       </a>
@@ -234,30 +269,30 @@ function ChatProductCard({ product, onInternalProductClick }) {
       className="chat-widget-product-card"
       to={destination}
       onClick={onInternalProductClick}
-      aria-label={`View details for ${product.name}`}
+      aria-label={`View details for ${displayName}`}
     >
       {cardContent}
     </Link>
   );
 }
 
-function ChatRefinementPrompt({ products, onPromptClick, disabled }) {
-  const prompts = refinementPrompts(products);
+function ChatRefinementPrompt({ products, userMessage, onPromptClick, disabled }) {
+  const prompts = refinementPrompts(products, userMessage);
   if (!prompts.length) return null;
 
   return (
     <div className="chat-widget-refine">
-      <p>Are any of these catching your eye, or would you like to refine the search?</p>
+      <p>You can keep exploring:</p>
       <div className="chat-widget-refine-chips">
         {prompts.map((prompt) => (
           <button
-            key={prompt}
+            key={prompt.message}
             type="button"
             className="chat-widget-refine-chip"
-            onClick={() => onPromptClick(prompt)}
+            onClick={() => onPromptClick(prompt.message)}
             disabled={disabled}
           >
-            ✦ {prompt}
+            {prompt.label}
           </button>
         ))}
       </div>
@@ -285,21 +320,107 @@ function ChatQuickActions({ actions, onPromptClick, disabled }) {
   );
 }
 
-function refinementPrompts(products) {
+function addUniquePrompt(prompts, prompt) {
+  if (!prompts.some((existing) => existing.label === prompt.label)) {
+    prompts.push(prompt);
+  }
+}
+
+function productTypeFromContext(products, requestText) {
+  const context = [
+    requestText,
+    products.map((product) => product.name).join(" "),
+    products.map((product) => product.category).join(" "),
+  ].join(" ").toLowerCase();
+
+  if (context.includes("dress")) return "dresses";
+  if (context.includes("shoe") || context.includes("boot") || context.includes("sneaker")) return "shoes";
+  if (context.includes("coat") || context.includes("jacket") || context.includes("outerwear")) return "outerwear";
+  if (context.includes("top") || context.includes("shirt") || context.includes("blouse")) return "tops";
+  if (context.includes("bottom") || context.includes("pant") || context.includes("jean") || context.includes("skirt")) return "bottoms";
+  return "styles";
+}
+
+function budgetFromRequest(requestText) {
+  const match = String(requestText || "").match(/(?:under|below|less than|up to)\s*\$?\s*(\d+)/i);
+  return match ? Number(match[1]) : null;
+}
+
+function colorFromRequest(requestText) {
+  const colors = ["black", "white", "red", "blue", "green", "navy", "pink", "gray", "grey", "brown", "floral"];
+  const lowerRequest = String(requestText || "").toLowerCase();
+  return colors.find((color) => lowerRequest.includes(color)) || null;
+}
+
+function recommendedProductNames(products, limit = 2) {
+  return products
+    .map((product) => formatProductDisplayName(product.name))
+    .filter(Boolean)
+    .slice(0, limit);
+}
+
+function refinementPrompts(products, userMessage = "") {
   if (!products?.length) return [];
+  const prompts = [];
+  const lowerRequest = String(userMessage || "").toLowerCase();
   const external = products.some((product) => product.source === "external");
+  const productType = productTypeFromContext(products, userMessage);
+  const budget = budgetFromRequest(userMessage);
+  const color = colorFromRequest(userMessage);
+  const productNames = recommendedProductNames(products);
+  const compareTarget = productNames.length > 1 ? productNames.join(" and ") : "these recommendations";
+  const isCompareRequest = lowerRequest.includes("compare");
+  const asksAboutRating = lowerRequest.includes("rated") || lowerRequest.includes("rating");
+  const hasMultipleProducts = products.length > 1;
+  const hasRatings = products.some((product) => typeof product.rating === "number" && product.rating > 0);
+  const hasInternalProducts = products.some((product) => product.source !== "external");
+
   if (external) {
-    return ["Show Scout options only", "Lower price", "Similar styles"];
+    addUniquePrompt(prompts, { label: "Show Lumi picks", message: "Show Scout catalog options only" });
   }
 
-  const names = products.map((product) => String(product.name || "").toLowerCase()).join(" ");
-  if (names.includes("dress")) {
-    return ["Black dresses"];
+  if (hasMultipleProducts && !isCompareRequest) {
+    addUniquePrompt(prompts, {
+      label: productNames.length > 1 ? `Compare ${productNames[0]} vs ${productNames[1]}` : "Compare these picks",
+      message: `Compare ${compareTarget}`,
+    });
   }
-  if (names.includes("shoe") || names.includes("boot") || names.includes("sneaker")) {
-    return ["Waterproof options"];
+
+  if (hasInternalProducts) {
+    addUniquePrompt(prompts, {
+      label: productNames[0] ? `Check sizes for ${productNames[0]}` : "Check size availability",
+      message: productNames[0] ? `Check size availability for ${productNames[0]}` : "Check size availability for these recommendations",
+    });
   }
-  return ["Similar styles"];
+
+  if (!lowerRequest.includes("similar")) {
+    addUniquePrompt(prompts, {
+      label: `Find similar ${productType}`,
+      message: `Find similar ${productType}`,
+    });
+  }
+
+  if (budget && !lowerRequest.includes(`$${budget}`) && !lowerRequest.includes(`under ${budget}`)) {
+    addUniquePrompt(prompts, {
+      label: `Find similar under $${budget}`,
+      message: `Find similar ${productType} under $${budget}`,
+    });
+  } else {
+    addUniquePrompt(prompts, { label: "Show cheaper options", message: "Show cheaper similar options" });
+  }
+
+  if (hasRatings && hasMultipleProducts && !isCompareRequest && !asksAboutRating) {
+    addUniquePrompt(prompts, { label: "Which is better rated?", message: "Which of these is better rated?" });
+  }
+
+  if (color) {
+    addUniquePrompt(prompts, {
+      label: `Show more ${color} ${productType}`,
+      message: `Show me more ${color} ${productType}`,
+    });
+  }
+
+  return prompts.slice(0, 4);
 }
 
 export default function ChatWidget() {
@@ -311,7 +432,7 @@ export default function ChatWidget() {
     chatSessionId,
     setChatSessionId,
   } = useChatWidget();
-  const { sessionId: authSessionId } = useAuth();
+  const { sessionId: authSessionId, customerId } = useAuth();
   const { addValidatedCartItem } = useCart();
   const location = useLocation();
   const [messages, setMessages] = useState([]);
@@ -335,7 +456,7 @@ export default function ChatWidget() {
 
   useEffect(() => {
     if (isOpen) {
-      messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+      messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
     }
   }, [messages, isOpen, progressSteps]);
 
@@ -478,7 +599,7 @@ export default function ChatWidget() {
       <button
         className="chat-widget-bubble"
         onClick={() => setIsOpen(true)}
-        aria-label="Open shopping assistant"
+        aria-label="Ask Scout shopping assistant"
       >
         <svg
           className="chat-widget-bubble-icon"
@@ -545,7 +666,7 @@ export default function ChatWidget() {
         {messages.length === 0 && (
           <div className="chat-widget-empty">
             <p className="chat-widget-empty-title">Hi, I’m Scout.</p>
-            <p className="chat-widget-empty-subtitle">Ask me naturally about products, availability, orders, or returns.</p>
+            <p className="chat-widget-empty-subtitle">Ask about products, availability, orders, or returns.</p>
 
             <div className="chat-widget-starters">
               {STARTER_PROMPTS.map(({ text, Icon }) => (
@@ -560,16 +681,7 @@ export default function ChatWidget() {
                 </button>
               ))}
             </div>
-
-            <div className="chat-widget-capability-card">
-              <span className="chat-widget-capability-kicker">What Scout can help with</span>
-              <div className="chat-widget-capability-grid">
-                <span>✓ Product search</span>
-                <span>✓ Store availability</span>
-                <span>✓ Order lookup</span>
-                <span>✓ Returns policy</span>
-              </div>
-            </div>
+            <p className="chat-widget-empty-hint">You can also type your own question below.</p>
           </div>
         )}
 
@@ -581,7 +693,7 @@ export default function ChatWidget() {
           const quickActions = [];
 
           return (
-            <div key={i}>
+            <div key={i} className="chat-widget-message-group">
               <div className={`chat-widget-bubble-msg chat-widget-bubble-msg--${msg.role}`}>
                 {msg.role === "assistant" ? (
                   <ReactMarkdown
@@ -637,9 +749,12 @@ export default function ChatWidget() {
                   <ChatProductRail
                     products={msg.products}
                     onInternalProductClick={() => setIsOpen(false)}
+                    sessionId={sessionId}
+                    customerId={customerId}
                   />
                   <ChatRefinementPrompt
                     products={msg.products}
+                    userMessage={msg.userMessage}
                     onPromptClick={handleStarterClick}
                     disabled={isLoading}
                   />
@@ -690,7 +805,7 @@ export default function ChatWidget() {
           </div>
         )}
 
-        <div ref={messagesEndRef} />
+        <div ref={messagesEndRef} className="chat-widget-scroll-anchor" aria-hidden="true" />
       </div>
 
       <div className="chat-widget-input-area">

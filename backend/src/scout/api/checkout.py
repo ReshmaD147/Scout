@@ -1,10 +1,11 @@
 from typing import Optional
 import hashlib
 import json
+import re
 import uuid
 
 from fastapi import APIRouter
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, field_validator
 
 from scout.db.session import SessionLocal
 from scout.repositories.product_repository import ProductRepository
@@ -29,17 +30,79 @@ class CheckoutItem(BaseModel):
     recommendation_session_id: str | None = None
 
 
+class CheckoutAddress(BaseModel):
+    full_name: str = Field(min_length=1, max_length=120)
+    address_line1: str = Field(min_length=1, max_length=160)
+    address_line2: str | None = Field(default=None, max_length=160)
+    city: str = Field(min_length=1, max_length=100)
+    state: str = Field(min_length=1, max_length=80)
+    postal_code: str = Field(min_length=1, max_length=20)
+    country: str = Field(default="US", min_length=2, max_length=60)
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def trim_strings(cls, value):
+        if isinstance(value, str):
+            stripped = value.strip()
+            return stripped or None
+        return value
+
+
 class CheckoutRequest(BaseModel):
     items: list[CheckoutItem]
     customer_id: Optional[str] = "guest"
     session_id: str | None = None
+    contact_email: str | None = None
+    shipping_address: CheckoutAddress | None = None
+    billing_same_as_shipping: bool = True
+    billing_address: CheckoutAddress | None = None
+
+    @field_validator("contact_email")
+    @classmethod
+    def contact_email_valid(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        normalized = value.strip().lower()
+        if not re.match(r"^[^@\s]+@[^@\s]+\.[^@\s]+$", normalized):
+            raise ValueError("contact_email must be a valid email address")
+        return normalized
+
+    @field_validator("billing_address")
+    @classmethod
+    def billing_address_required_when_different(cls, value, info):
+        if info.data.get("billing_same_as_shipping") is False and value is None:
+            raise ValueError("billing_address is required when billing differs from shipping")
+        return value
 
 
 class CheckoutFinalizeRequest(CheckoutRequest):
     payment_intent_id: str
 
 
-def _cart_fingerprint(items: list[CheckoutItem], session_id: str | None = None) -> str:
+def _address_fingerprint(address: CheckoutAddress | None) -> dict:
+    if address is None:
+        return {}
+    return address.model_dump()
+
+
+def _checkout_details_fingerprint(request: CheckoutRequest | None = None) -> dict:
+    if request is None:
+        return {}
+    return {
+        "contact_email": str(request.contact_email or "").strip().lower(),
+        "shipping_address": _address_fingerprint(request.shipping_address),
+        "billing_same_as_shipping": bool(request.billing_same_as_shipping),
+        "billing_address": _address_fingerprint(
+            request.shipping_address if request.billing_same_as_shipping else request.billing_address
+        ),
+    }
+
+
+def _cart_fingerprint(
+    items: list[CheckoutItem],
+    session_id: str | None = None,
+    checkout_details: CheckoutRequest | None = None,
+) -> str:
     canonical_items = sorted(
         (
             {
@@ -57,8 +120,57 @@ def _cart_fingerprint(items: list[CheckoutItem], session_id: str | None = None) 
             item["product_id"], item["size"], item["color"], item["quantity"]
         ),
     )
-    payload = json.dumps(canonical_items, separators=(",", ":"), sort_keys=True)
+    payload = json.dumps(
+        {
+            "items": canonical_items,
+            "checkout_details": _checkout_details_fingerprint(checkout_details),
+        },
+        separators=(",", ":"),
+        sort_keys=True,
+    )
     return hashlib.sha256(payload.encode()).hexdigest()
+
+
+def _checkout_details_to_order_fields(request: CheckoutRequest, payment: dict | None = None) -> dict:
+    shipping = request.shipping_address
+    billing = request.shipping_address if request.billing_same_as_shipping else request.billing_address
+    details = {
+        "contact_email": str(request.contact_email) if request.contact_email else None,
+        "billing_same_as_shipping": request.billing_same_as_shipping,
+        "stripe_receipt_email": (payment or {}).get("receipt_email") or (str(request.contact_email) if request.contact_email else None),
+        "stripe_receipt_status": "sent_by_stripe_test_mode" if request.contact_email else None,
+    }
+    if shipping:
+        details.update({
+            "shipping_name": shipping.full_name,
+            "shipping_address_line1": shipping.address_line1,
+            "shipping_address_line2": shipping.address_line2,
+            "shipping_city": shipping.city,
+            "shipping_state": shipping.state,
+            "shipping_postal_code": shipping.postal_code,
+            "shipping_country": shipping.country,
+        })
+    if billing:
+        details.update({
+            "billing_name": billing.full_name,
+            "billing_address_line1": billing.address_line1,
+            "billing_address_line2": billing.address_line2,
+            "billing_city": billing.city,
+            "billing_state": billing.state,
+            "billing_postal_code": billing.postal_code,
+            "billing_country": billing.country,
+        })
+    return details
+
+
+def _checkout_details_error(request: CheckoutRequest) -> str | None:
+    if not request.contact_email:
+        return "Contact email is required."
+    if not request.shipping_address:
+        return "Shipping address is required."
+    if not request.billing_same_as_shipping and not request.billing_address:
+        return "Billing address is required."
+    return None
 
 
 def _validated_cart_items(
@@ -120,6 +232,9 @@ def checkout(request: CheckoutRequest):
         )
         if error:
             return {"success": False, "error": error}
+        details_error = _checkout_details_error(request)
+        if details_error:
+            return {"success": False, "error": details_error}
         precomputed_total = sum(
             ci["_computed_price"] * ci["quantity"] for ci in cart_items
         )
@@ -134,8 +249,10 @@ def checkout(request: CheckoutRequest):
                     "cart_fingerprint": _cart_fingerprint(
                         request.items,
                         session_id=request.session_id,
+                        checkout_details=request,
                     ),
                 },
+                receipt_email=str(request.contact_email) if request.contact_email else None,
             )
         except PaymentProcessingError as e:
             return {"success": False, "error": str(e)}
@@ -149,6 +266,9 @@ def checkout(request: CheckoutRequest):
 def finalize_checkout(request: CheckoutFinalizeRequest):
     session = SessionLocal()
     try:
+        details_error = _checkout_details_error(request)
+        if details_error:
+            return {"success": False, "error": details_error}
         try:
             payment = retrieve_test_payment(request.payment_intent_id)
         except PaymentProcessingError as e:
@@ -165,6 +285,7 @@ def finalize_checkout(request: CheckoutFinalizeRequest):
         if payment["metadata"].get("cart_fingerprint") != _cart_fingerprint(
             request.items,
             session_id=request.session_id,
+            checkout_details=request,
         ):
             return {"success": False, "error": "Checkout items do not match the completed payment."}
 
@@ -193,6 +314,7 @@ def finalize_checkout(request: CheckoutFinalizeRequest):
             cart_items=cart_items,
             order_id=order_id,
             status="processing",
+            checkout_details=_checkout_details_to_order_fields(request, payment),
         )
         return {"success": True, "order": order, "payment": payment}
     finally:

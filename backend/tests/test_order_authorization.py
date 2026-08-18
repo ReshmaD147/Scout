@@ -159,6 +159,49 @@ def test_demo_auth_sign_in_creates_trusted_session_context(monkeypatch):
     assert chat_api.SESSION_CONTEXTS[response.session_id]["demo_authenticated"] is True
 
 
+def test_account_summary_requires_authenticated_demo_session():
+    chat_api.SESSION_CONTEXTS.clear()
+
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(chat_api.account_summary(chat_api.AccountSummaryRequest(session_id="anon-session")))
+
+    assert exc.value.status_code == 401
+
+
+def test_account_summary_returns_orders_shipments_and_feedback(monkeypatch):
+    chat_api.SESSION_CONTEXTS.clear()
+    chat_api.SESSION_CONTEXTS["account-session"] = {
+        "authenticated_customer_id": "C001",
+        "demo_authenticated": True,
+    }
+    monkeypatch.setattr(
+        chat_api,
+        "list_recommendation_feedback",
+        lambda **kwargs: [
+            {
+                "feedback_id": "fb-1",
+                "session_id": kwargs["session_id"],
+                "customer_id": kwargs["customer_id"],
+                "recommendation_id": "rec-1",
+                "product_id": "P001",
+                "rating": "up",
+                "created_at": "2026-08-18T00:00:00",
+                "updated_at": "2026-08-18T00:00:00",
+            }
+        ],
+    )
+
+    summary = asyncio.run(chat_api.account_summary(chat_api.AccountSummaryRequest(session_id="account-session")))
+
+    assert summary["customer"]["customer_id"] == "C001"
+    assert summary["customer"]["demo_identity"] is True
+    assert {order["order_id"] for order in summary["orders"]} == {"O1001", "O1003"}
+    assert all(order["customer_id"] == "C001" for order in summary["orders"])
+    assert all("shipment" in order for order in summary["orders"])
+    assert summary["recommendation_feedback"][0]["product_id"] == "P001"
+    assert summary["recommendation_feedback"][0]["product_name"] == "Black Midi Dress"
+
+
 def test_authenticated_demo_owner_can_access_own_order(monkeypatch):
     _enable_demo_auth(monkeypatch)
     chat_api.SESSION_CONTEXTS.clear()

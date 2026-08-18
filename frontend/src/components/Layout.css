@@ -302,6 +302,12 @@
   box-sizing: border-box;
 }
 
+@media (min-width: 981px) {
+  .layout--product-chat-open .layout-content {
+    padding-right: 486px;
+  }
+}
+
 /* Responsive: collapse text labels on small screens, keep icons + cart count visible */
 @media (max-width: 640px) {
   .layout-header {

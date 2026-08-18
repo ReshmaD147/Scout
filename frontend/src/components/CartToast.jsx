@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useCart } from "../context/CartContext";
+import { formatProductDisplayName } from "./productDisplay";
 import "./CartToast.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -69,6 +70,7 @@ export default function CartToast() {
   }, [visible, closeToast]);
 
   if (!visible || !lastAdded) return null;
+  const displayName = formatProductDisplayName(lastAdded.name);
 
   function handleViewCart() {
     closeToast({ returnFocus: false });
@@ -111,13 +113,13 @@ export default function CartToast() {
             <img
               className="cart-toast-image"
               src={resolveImageUrl(lastAdded.image_url)}
-              alt={lastAdded.name}
+              alt={displayName}
             />
           ) : (
             <div className="cart-toast-image cart-toast-image--placeholder" />
           )}
           <div className="cart-toast-details">
-            <p className="cart-toast-name">{lastAdded.name}</p>
+            <p className="cart-toast-name">{displayName}</p>
             {/* Size only shown if it actually exists — no variant-selection
                 UI exists yet, so this line simply won't render today. */}
             {lastAdded.size && (

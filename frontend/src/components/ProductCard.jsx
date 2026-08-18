@@ -9,6 +9,7 @@ import {
   getImagePresentation,
   getPromotionPresentation,
 } from "./ProductCard.helpers";
+import { formatProductDisplayName } from "./productDisplay";
 import "./ProductCard.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
@@ -26,6 +27,7 @@ export default function ProductCard({ product }) {
   const promotionPresentation = getPromotionPresentation(product);
   const imagePresentation = getImagePresentation(product, imageFailed);
   const availabilityPresentation = getAvailabilityPresentation(product);
+  const displayName = formatProductDisplayName(product.name);
 
   const resolvedClickUrl = product.click_url
     ? (product.click_url.startsWith("/") ? `${API_BASE}${product.click_url}` : product.click_url)
@@ -62,7 +64,7 @@ export default function ProductCard({ product }) {
         href: resolvedClickUrl,
         target: "_blank",
         rel: "noopener noreferrer sponsored",
-        "aria-label": `View ${product.name} at ${product.vendor_name}`,
+        "aria-label": `View ${displayName} at ${product.vendor_name}`,
       },
       `View at ${product.vendor_name}`
     ),
@@ -164,10 +166,10 @@ export default function ProductCard({ product }) {
 
         {product.product_id ? (
           <Link to={`/product/${product.product_id}`} className="product-card-name-link">
-            <p className="product-card-name">{product.name}</p>
+            <p className="product-card-name">{displayName}</p>
           </Link>
         ) : (
-          <p className="product-card-name">{product.name}</p>
+          <p className="product-card-name">{displayName}</p>
         )}
 
         {typeof product.rating === "number" && product.rating > 0 && (
