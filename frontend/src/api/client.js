@@ -88,6 +88,10 @@ export async function addToCartRequest(productId, quantity = 1, options = {}) {
   };
   if (options.size) payload.size = options.size;
   if (options.color) payload.color = options.color;
+  // Real bug fix: recommendation_id was being silently dropped here,
+  // breaking attribution for every cart-add that carried one (e.g. the
+  // "Add to Cart" button on chat product cards).
+  if (options.recommendation_id) payload.recommendation_id = options.recommendation_id;
 
   const response = await fetch(`${BASE_URL}/cart/add`, {
     method: "POST",

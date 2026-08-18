@@ -47,6 +47,11 @@ export default function CartPage() {
             quantity: i.quantity,
             size: i.size,
             color: i.color,
+            // Real bug fix: attribution was correctly preserved through
+            // cart-add and CartContext, but dropped here at the final
+            // checkout step, breaking Scout-attributed revenue tracking.
+            attribution_source: i.attribution_source,
+            recommendation_id: i.recommendation_id,
           })),
         }),
       });

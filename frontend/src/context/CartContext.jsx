@@ -124,6 +124,12 @@ export function CartProvider({ children }) {
         quantity: result.quantity,
         size: result.size,
         color: result.color,
+        // Real bug fix: attribution was being computed correctly by
+        // the backend (validated against the real recommendation
+        // registry) but then discarded here, so it never survived
+        // into checkout.
+        attribution_source: result.attribution_source,
+        recommendation_id: result.recommendation_id,
       };
 
       dispatch({ type: "ADD_ITEM", item });

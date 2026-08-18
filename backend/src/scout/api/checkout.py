@@ -59,11 +59,24 @@ def checkout(request: CheckoutRequest):
                     "error": f"Only {stock_info['total_quantity']} available for {product_label}.",
                 }
 
+            # Real security fix: never trust attribution_source/
+            # recommendation_id directly from the request body - that
+            # would let anyone fabricate "scout-attributed" revenue by
+            # simply including those fields in a checkout call.
+            # Independently re-validate against the real recommendation
+            # registry, exactly like /cart/add already does, so only a
+            # genuine, previously-issued recommendation_id for THIS
+            # product can ever be recorded as Scout-attributed.
+            from scout.agents.attribution import validate_recommendation
+            is_genuinely_attributed = (
+                item.recommendation_id
+                and validate_recommendation(item.recommendation_id, item.product_id)
+            )
             cart_items.append({
                 "product_id": item.product_id,
                 "quantity": item.quantity,
-                "attribution_source": item.attribution_source,
-                "recommendation_id": item.recommendation_id,
+                "attribution_source": "scout" if is_genuinely_attributed else None,
+                "recommendation_id": item.recommendation_id if is_genuinely_attributed else None,
             })
         order = create_order(session, customer_id=request.customer_id, cart_items=cart_items)
 
