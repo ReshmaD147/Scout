@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { CartProvider } from "./context/CartContext";
+import { AuthProvider } from "./context/AuthContext";
 import { SavedItemsProvider } from "./context/SavedItemsContext";
 import { ChatWidgetProvider } from "./context/ChatWidgetContext";
 import Layout from "./components/Layout";
@@ -14,6 +15,7 @@ import "./styles/tokens.css";
 
 function App() {
   return (
+    <AuthProvider>
     <CartProvider>
       <SavedItemsProvider>
         <ChatWidgetProvider>
@@ -33,6 +35,7 @@ function App() {
         </ChatWidgetProvider>
       </SavedItemsProvider>
     </CartProvider>
+    </AuthProvider>
   );
 }
 

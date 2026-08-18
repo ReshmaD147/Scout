@@ -3,6 +3,7 @@ import { Link, useLocation } from "react-router-dom";
 import { sendChatFeedback, streamChatMessage } from "../api/client";
 import { useChatWidget } from "../context/ChatWidgetContext";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
 import {
   formatCurrency,
   getImagePresentation,
@@ -303,10 +304,17 @@ function refinementPrompts(products) {
 
 export default function ChatWidget() {
   const { isOpen, setIsOpen, prefillMessage, prefillNonce } = useChatWidget();
+  const { sessionId: authSessionId } = useAuth();
   const location = useLocation();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [sessionId, setSessionId] = useState(null);
+  const [localSessionId, setLocalSessionId] = useState(null);
+  // Use the authenticated session_id once the customer signs in (so
+  // order/shipment questions are correctly recognized as coming from a
+  // signed-in customer); otherwise fall back to whatever local session
+  // the chat itself has already established.
+  const sessionId = authSessionId || localSessionId;
+  const setSessionId = setLocalSessionId;
   const [isLoading, setIsLoading] = useState(false);
   const [progressSteps, setProgressSteps] = useState([]);
   const [progressCollapsed, setProgressCollapsed] = useState(false);

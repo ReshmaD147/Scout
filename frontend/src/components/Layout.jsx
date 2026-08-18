@@ -3,6 +3,7 @@ import { Link, Outlet, useNavigate, useLocation } from "react-router-dom";
 import { useCart } from "../context/CartContext";
 import { useSavedItems } from "../context/SavedItemsContext";
 import { useChatWidget } from "../context/ChatWidgetContext";
+import { useAuth } from "../context/AuthContext";
 import ChatWidget from "./ChatWidget";
 import CartToast from "./CartToast";
 import "./Layout.css";
@@ -78,6 +79,7 @@ export default function Layout() {
   const { itemCount, total } = useCart();
   const { count: savedCount } = useSavedItems();
   const { setIsOpen: setChatOpen } = useChatWidget();
+  const { isSignedIn, customerId, signingIn, signInAsDemoCustomer, signOut } = useAuth();
   const [searchInput, setSearchInput] = useState("");
   const [accountOpen, setAccountOpen] = useState(false);
   const navigate = useNavigate();
@@ -138,15 +140,33 @@ export default function Layout() {
             {accountOpen && (
               <div className="layout-account-dropdown">
                 <p className="layout-account-title">Your Lumi account</p>
-                <p className="layout-account-subtitle">
-                  Sign in to track orders, save items, and get personalized help.
-                </p>
-                <button className="layout-account-signin-btn" disabled>
-                  Sign in
-                </button>
-                <p className="layout-account-note">
-                  (Account sign-in isn't connected yet — placeholder UI only.)
-                </p>
+                {isSignedIn ? (
+                  <>
+                    <p className="layout-account-subtitle">
+                      Signed in as demo customer {customerId}.
+                    </p>
+                    <button className="layout-account-signin-btn" onClick={signOut}>
+                      Sign out
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <p className="layout-account-subtitle">
+                      Sign in to track orders, save items, and get personalized help.
+                    </p>
+                    <button
+                      className="layout-account-signin-btn"
+                      disabled={signingIn}
+                      onClick={() => signInAsDemoCustomer("C001")}
+                    >
+                      {signingIn ? "Signing in..." : "Sign in as demo customer"}
+                    </button>
+                    <p className="layout-account-note">
+                      (Demo sign-in - authenticates as a real, seeded customer to
+                      show order/shipment lookup.)
+                    </p>
+                  </>
+                )}
               </div>
             )}
           </div>
