@@ -9,14 +9,15 @@ The guiding rule is simple: **anything that can cost money or trust stays determ
 ## Demo Highlights
 
 - **Agentic commerce assistant:** recommendations, inventory checks, store availability, order status, policy Q&A, and external-offer fallback.
+- **Portfolio shopping journey:** Scout supports a verified flow from recommendation → size/stock check → cart add → Stripe checkout → order confirmation.
 - **Five specialists:** `recommend_agent`, `inventory_agent`, `order_agent`, `external_offer_agent`, and `policy_agent`, built with LangChain `create_agent` and reached through deterministic/direct routing or the Supervisor path when needed.
 - **Evidence-backed output:** tool calls produce structured evidence; proposed claims are verified before customer-visible factual replies and product cards are rebuilt from approved claims.
-- **Safe commerce boundary:** no checkout, payment, refund, cancellation, SQL, shell, or unrestricted HTTP tool is exposed to specialists. Checkout remains a deterministic REST route.
+- **Safe commerce boundary:** no checkout, payment, refund, cancellation, SQL, shell, or unrestricted HTTP tool is exposed to specialists. Checkout, inventory reservation, payment finalization, order creation, attribution, and analytics remain deterministic REST/service-layer behavior.
 - **Local demo mode:** `ENABLE_STRIPE_MCP=false MODEL_PROVIDER=ollama` starts the app without Stripe MCP discovery while preserving deterministic Stripe REST checkout code.
 - **Recommendation-driven revenue tracking:** every recommendation is tagged with a verified `recommendation_id`, carried through cart and checkout, so completed sales can be independently attributed back to Scout — see the internal `/admin/impact` dashboard.
 - **Shipment tracking:** authenticated customers can ask about live carrier, status, and estimated delivery for their own orders, with the same read-only-tool and evidence/claims/verification boundary as everything else.
 - **Deterministic tool-first path:** clear, unambiguous requests (a specific recommendation, order lookup, or inventory check) bypass the language model entirely and call the appropriate tool directly — removing a real source of non-deterministic behavior for requests that don't need the model's judgment at all.
-- **Validated baseline:** the deterministic backend test suite passes, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
+- **Validated baseline:** 458 backend tests pass, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Architecture At A Glance
 
@@ -71,7 +72,7 @@ Recommended portfolio captures live in [`docs/screenshots/README.md`](docs/scree
 | Agent orchestration | LangGraph Supervisor + five LangChain `create_agent` specialists |
 | Models | Ollama, Claude, Gemini, Groq provider support |
 | Tool boundary | MCP local Scout server + code-selected specialist allowlists |
-| Data | SQLite, SQLAlchemy repositories/services |
+| Data | SQLite locally, Railway/Postgres-ready via `DATABASE_URL`, SQLAlchemy repositories/services |
 | Retrieval | Chroma product and policy collections, Ollama `nomic-embed-text` |
 | Safety | Evidence schemas, claim verification, approved-only renderer, bounded correction |
 
@@ -141,20 +142,98 @@ The frontend expects the backend on `http://127.0.0.1:8000` for API and product 
 
 ## Live Deployment
 
-Scout is deployed on [Railway](https://railway.app) as three coordinated services within a single project:
+Scout is designed to deploy on [Railway](https://railway.app) as coordinated services within a single project:
 
-- **Backend** — FastAPI app, built from `backend.Dockerfile`.
-- **Frontend** — React app, built from `frontend.Dockerfile` and served via nginx.
-- **Ollama** — a dedicated service running `ollama/ollama:latest`, used only for generating embeddings (product/policy semantic search). Chat reasoning uses `MODEL_PROVIDER=claude` in this deployment; Ollama for chat remains a local-development-only option.
+- **Backend** — FastAPI app built with the root-level `backend.Dockerfile`.
+- **Frontend** — React/Vite app built with the root-level `frontend.Dockerfile`.
+- **PostgreSQL** — persistent Railway database for orders, checkout records, recommendation feedback, and attribution data.
+- **Optional Ollama** — local development model/embedding support. Production chat can use hosted model-provider keys instead of a public Ollama service.
 
-Backend environment variables include the standard `.env.example` settings, plus `OLLAMA_BASE_URL` pointed at the Ollama service's private Railway networking address (`http://<service-name>.railway.internal:11434`) so embeddings resolve correctly without exposing Ollama publicly.
+Suggested Railway service settings:
 
-Since the SQLite database is not currently backed by a persistent volume in this deployment, it resets on every backend rebuild and needs reseeding:
+```text
+Backend root directory: /
+Backend builder: Dockerfile
+Backend Dockerfile path: /backend.Dockerfile
+Backend watch path: /backend/**
+
+Frontend root directory: /
+Frontend builder: Dockerfile
+Frontend Dockerfile path: /frontend.Dockerfile
+Frontend watch path: /frontend/**
+```
+
+The backend container starts with:
+
+```bash
+uvicorn scout.main:app --host 0.0.0.0 --port ${PORT:-8000} --app-dir src
+```
+
+The frontend container builds the Vite app and serves it with:
+
+```bash
+npm run preview -- --host 0.0.0.0 --port ${PORT:-4173}
+```
+
+Backend environment variables should be configured in Railway, not committed:
+
+```text
+DATABASE_URL=${{ Postgres.DATABASE_URL }}
+STRIPE_SECRET_KEY=...
+MODEL_PROVIDER=...
+ALLOWED_ORIGINS=https://<frontend-domain>
+```
+
+Frontend environment variables:
+
+```text
+VITE_API_BASE_URL=https://<backend-domain>
+VITE_STRIPE_PUBLISHABLE_KEY=...
+```
+
+### Railway Database Persistence
+
+SQLite is the local-development default. If a SQLite file lives inside the Railway backend container filesystem, Railway rebuilds can replace that filesystem and reset orders, recommendation feedback, seeded data, and other mutable demo state. That is acceptable for short local demos only if reseeding is expected; it is not production-ready persistence.
+
+For a production-readiness improvement, prefer one of these paths:
+
+1. **Recommended: Railway Postgres**
+   - Use Railway's managed Postgres service for persistent application data.
+   - Keep SQLite as the local-development and test default.
+   - Configure the backend with Railway's `DATABASE_URL` environment variable when deployed. The backend automatically uses SQLite when `DATABASE_URL` is absent and normalizes Railway/Postgres URLs for SQLAlchemy via the `psycopg` driver.
+   - Preserve the existing SQLAlchemy repository/service boundary so checkout, order creation, attribution, feedback, and analytics remain deterministic.
+
+   ```text
+   DATABASE_URL=${{ Postgres.DATABASE_URL }}
+   ```
+
+2. **Demo-only fallback: persistent SQLite volume**
+   - Attach a Railway volume and store the SQLite database at a volume-backed path such as `/data/scout.db`.
+   - This prevents rebuild resets while keeping the deployment simple.
+   - This is less production-like than Postgres and should still be described as a demo persistence option.
+
+Until persistent storage is configured, the Railway SQLite database resets on backend rebuilds and needs reseeding:
 
 ```bash
 python -m scout.db.seed
 python -m scout.db.update_image_urls
 ```
+
+For a fresh Railway Postgres database, run the deployment initializer once after the backend service has the `DATABASE_URL` variable configured:
+
+```bash
+python -m scout.db.init_deployment_data
+```
+
+If the private Ollama embedding service is available and you also want to rebuild Chroma policy/product embeddings during initialization, run:
+
+```bash
+python -m scout.db.init_deployment_data --rebuild-embeddings
+```
+
+Use `--strict-embeddings` only when the deployment should fail if embeddings cannot be regenerated.
+
+Do not commit deployment secrets or real environment files. Configure database URLs, Stripe keys, model-provider keys, and Railway service URLs through Railway environment variables.
 
 ## Validation
 
@@ -167,24 +246,41 @@ npm run lint
 npm run build
 ```
 
+Current baseline:
+
+```text
+Backend: 458 tests passing
+Frontend: ESLint passing
+Frontend: production build passing
+```
+
 Live-evaluation methodology and release metrics are summarized in [`docs/evaluation.md`](docs/evaluation.md). Run-specific JSON and log artifacts can be regenerated locally and do not need to be committed for the portfolio demo.
 
 ## Demo Flow
 
-Use these as the live demo script:
+Use these as the live demo prompts:
+
+```text
+Recommend a dress under $80
+Is the Black Midi Dress available in medium?
+Do you have a red cocktail dress under $100?
+Where is order O1001?
+```
+
+Recommended live demo sequence:
 
 | Step | Query | What it proves |
 |---|---|---|
-| 1 | "Recommend a dress under $80." | Verified recommendations, prices, promotions, and product cards. |
-| 2 | "I like the second one." | Natural-language product selection among several shown options. |
-| 3 | "Wait, is it available in medium first?" | An interruption doesn't lose context - the correct product is checked, and the pending cart offer survives. |
-| 4 | "Yes." | Cart additions only happen on explicit confirmation, never unilaterally. |
-| 5 | "Is it available at Maple Grove?" | A second specialist (inventory) takes over seamlessly for store-specific stock. |
-| 6 | "Where is order O1001?" (signed in) | Authenticated order + live shipment tracking; unauthenticated/cross-customer requests are blocked. |
-| 7 | "Can I return an opened item?" | A third specialist (policy) answers from real policy documents. |
-| 8 | "Do you have any red cocktail dresses under $50?" | Verified internal insufficiency before labeled, honest third-party alternatives. |
-| 9 | Complete checkout via the storefront UI | Deterministic, non-AI checkout and payment. |
-| 10 | Open `/admin/impact` | The completed sale now reflects in real, measured Scout-attributed revenue. |
+| 1 | "Recommend a dress under $80." | Verified Lumi recommendations, prices, promotions, product cards, and recommendation feedback. |
+| 2 | "Is the Black Midi Dress available in medium?" | Multi-turn context plus deterministic inventory verification; Scout does not guess stock. |
+| 3 | "Is it available in large?" | Follow-up size check keeps the same product/color context. |
+| 4 | "Can you add it to my cart?" | Scout adds only the verified size/color variant after explicit confirmation. |
+| 5 | Open the cart and checkout | Browser cart state updates; checkout remains deterministic and outside the AI assistant path. |
+| 6 | Pay with Stripe test card `4242 4242 4242 4242` | Stripe Elements handles card details; backend finalizes only after payment succeeds. |
+| 7 | Order confirmation page | Shows order number, total charged, shipping destination, payment confirmation, and receipt status. |
+| 8 | Clear chat, then ask "Do you have a red cocktail dress under $100?" | Honest external fallback when Lumi has no matching internal product. |
+| 9 | Click "Compare ..." on external options | External comparison stays external and reminds customers to confirm sizing, shipping, and returns with the outside retailer. |
+| 10 | Clear chat, then ask "Where is order O1001?" | Authenticated order + shipment support through read-only backend tools. |
 
 See [`docs/demo-script.md`](docs/demo-script.md) for the full talk track.
 
@@ -234,6 +330,7 @@ Together, these reinforce a core principle: Scout can assist and suggest, but th
 ## Known Limits
 
 - Order lookups fail closed without an authenticated customer context (see `docs/security.md`), and a local-only demo sign-in supports testing this — but there is no production-grade RBAC, rate limiting, human escalation, carrier integration, or warehouse integration.
+- The current Railway demo uses SQLite without guaranteed persistent storage unless a Railway volume or Postgres service is configured. For production readiness, move mutable app data to Railway Postgres and keep SQLite for local development/tests.
 - Chat session history is in-memory; frontend cart/saved state is browser `localStorage`.
 - Ollama latency depends heavily on local hardware; release eval should run in isolation.
 - The verifier covers explicit Scout-domain claim types; it is not a formal proof system or broad semantic entailment engine.

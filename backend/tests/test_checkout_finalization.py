@@ -103,7 +103,11 @@ def test_checkout_start_creates_payment_intent_without_creating_order(monkeypatc
     result = checkout_api.checkout(_request())
 
     assert result["success"] is True
-    assert result["total"] == 67.99
+    assert result["subtotal"] == 67.99
+    assert result["shipping"] == 5.99
+    assert result["tax"] == 4.67
+    assert result["tax_rate"] == 0.06875
+    assert result["total"] == 78.65
     assert "order" not in result
 
 
@@ -255,8 +259,8 @@ def test_finalize_rejects_attribution_changed_after_payment_started(monkeypatch)
         "retrieve_test_payment",
         lambda payment_intent_id: {
             "payment_intent_id": payment_intent_id,
-            "amount": 6799,
-            "amount_received": 6799,
+            "amount": 7865,
+            "amount_received": 7865,
             "currency": "usd",
             "status": "succeeded",
             "metadata": _payment_metadata(),
@@ -287,8 +291,8 @@ def test_finalize_uses_request_session_for_attribution(monkeypatch):
         "retrieve_test_payment",
         lambda payment_intent_id: {
             "payment_intent_id": payment_intent_id,
-            "amount": 6799,
-            "amount_received": 6799,
+            "amount": 7865,
+            "amount_received": 7865,
             "currency": "usd",
             "status": "succeeded",
             "metadata": _payment_metadata(session_id="sess_owner", items=[checkout_item]),
@@ -341,8 +345,8 @@ def test_finalize_creates_processing_order_after_verified_payment(monkeypatch):
         "retrieve_test_payment",
         lambda payment_intent_id: {
             "payment_intent_id": payment_intent_id,
-            "amount": 6799,
-            "amount_received": 6799,
+            "amount": 7865,
+            "amount_received": 7865,
             "currency": "usd",
             "status": "succeeded",
             "metadata": _payment_metadata(),
@@ -373,4 +377,8 @@ def test_finalize_creates_processing_order_after_verified_payment(monkeypatch):
     assert captured["checkout_details"]["contact_email"] == "rita@example.com"
     assert captured["checkout_details"]["shipping_city"] == "Minneapolis"
     assert captured["checkout_details"]["stripe_receipt_email"] == "rita@example.com"
+    assert result["order"]["subtotal"] == 67.99
+    assert result["order"]["shipping_total"] == 5.99
+    assert result["order"]["tax_total"] == 4.67
+    assert result["order"]["total"] == 78.65
     assert "_computed_price" not in captured["cart_items"][0]

@@ -19,6 +19,8 @@ CONTEXT_KEYS = {
     "pending_intent",
     "pending_missing_fields",
     "pending_store_availability_product_id",
+    "pending_cart_offer",
+    "completed_cart_add",
     "last_out_of_stock_product_id",
 }
 
@@ -33,14 +35,20 @@ def _safe_conversation_context(context: dict | None) -> dict | None:
 
 def _context_product(product: dict) -> dict | None:
     product_id = product.get("product_id")
-    if not isinstance(product_id, str) or not product_id.strip():
+    external_product_id = product.get("external_product_id")
+    if isinstance(product_id, str) and product_id.strip():
+        output = {"product_id": product_id}
+    elif isinstance(external_product_id, str) and external_product_id.strip():
+        output = {"external_product_id": external_product_id, "source": "external"}
+    else:
         return None
-    output = {"product_id": product_id}
     for key in (
         "name",
         "source",
         "category",
         "image_url",
+        "vendor_name",
+        "click_url",
         "recommendation_id",
         "recommendation_session_id",
     ):
@@ -99,7 +107,8 @@ def _update_context_from_verified_turn(
         if structured_intent and structured_intent.product_type:
             context["active_category"] = structured_intent.product_type
         if len(products) == 1:
-            context["active_product_id"] = products[0]["product_id"]
+            if products[0].get("product_id"):
+                context["active_product_id"] = products[0]["product_id"]
             context["active_product_name"] = products[0].get("name")
         context["pending_intent"] = None
         context["pending_missing_fields"] = []
@@ -128,6 +137,7 @@ def _update_context_from_verified_turn(
         for claim in approved_claims
         if claim.claim_type == ClaimType.PRODUCT_IDENTITY.value and claim.field in {"name", "product_name"}
     }
+    available_cart_offer = None
     for claim in approved_claims:
         if claim.claim_type in {
             ClaimType.ORDER_STATUS.value,
@@ -147,6 +157,21 @@ def _update_context_from_verified_turn(
             context["requested_size"] = subject.split(":size:", 1)[1].split(":", 1)[0]
         if ":color:" in subject:
             context["requested_color"] = subject.split(":color:", 1)[1].split(":", 1)[0]
+        if claim.claim_type == ClaimType.INVENTORY_AVAILABILITY.value and claim.value is True:
+            size = subject.split(":size:", 1)[1].split(":", 1)[0] if ":size:" in subject else None
+            color = subject.split(":color:", 1)[1].split(":", 1)[0] if ":color:" in subject else None
+            if size or color:
+                product_name = product_names.get(product_id) or context.get("active_product_name")
+                if product_name:
+                    available_cart_offer = {
+                        "product_id": product_id,
+                        "product_name": product_name,
+                        "size": size,
+                        "color": color,
+                        "quantity": 1,
+                        "recommendation_id": None,
+                        "recommendation_session_id": None,
+                    }
     if structured_intent:
         if structured_intent.budget_max is not None:
             context["requested_budget_max"] = structured_intent.budget_max
@@ -156,3 +181,5 @@ def _update_context_from_verified_turn(
             context["requested_color"] = structured_intent.color
         if structured_intent.location:
             context["requested_store"] = structured_intent.location
+    if available_cart_offer:
+        context["pending_cart_offer"] = available_cart_offer

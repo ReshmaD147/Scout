@@ -13,8 +13,11 @@ from scout.services.order_service import create_order, get_order
 from scout.services.payment_service import create_test_payment
 from scout.services.payment_service import retrieve_test_payment, PaymentProcessingError
 from scout.services.product_service import check_stock, _get_active_promotion_dict
+from scout.services.store_service import SHIPPING_FREE_THRESHOLD, SHIPPING_STANDARD_FEE
 
 router = APIRouter()
+
+MINNESOTA_MERCHANDISE_TAX_RATE = 0.06875
 
 
 class CheckoutItem(BaseModel):
@@ -163,6 +166,20 @@ def _checkout_details_to_order_fields(request: CheckoutRequest, payment: dict | 
     return details
 
 
+def _checkout_totals(subtotal: float) -> dict:
+    rounded_subtotal = round(float(subtotal), 2)
+    shipping = 0.0 if rounded_subtotal >= SHIPPING_FREE_THRESHOLD else SHIPPING_STANDARD_FEE
+    tax = round(rounded_subtotal * MINNESOTA_MERCHANDISE_TAX_RATE, 2)
+    total = round(rounded_subtotal + shipping + tax, 2)
+    return {
+        "subtotal": rounded_subtotal,
+        "shipping": round(shipping, 2),
+        "tax": tax,
+        "total": total,
+        "tax_rate": MINNESOTA_MERCHANDISE_TAX_RATE,
+    }
+
+
 def _checkout_details_error(request: CheckoutRequest) -> str | None:
     if not request.contact_email:
         return "Contact email is required."
@@ -235,14 +252,15 @@ def checkout(request: CheckoutRequest):
         details_error = _checkout_details_error(request)
         if details_error:
             return {"success": False, "error": details_error}
-        precomputed_total = sum(
+        precomputed_subtotal = sum(
             ci["_computed_price"] * ci["quantity"] for ci in cart_items
         )
+        totals = _checkout_totals(precomputed_subtotal)
         order_id = f"O{uuid.uuid4().hex[:8].upper()}"
 
         try:
             payment = create_test_payment(
-                amount_usd=precomputed_total,
+                amount_usd=totals["total"],
                 description=f"Scout order {order_id}",
                 metadata={
                     "order_id": order_id,
@@ -257,7 +275,7 @@ def checkout(request: CheckoutRequest):
         except PaymentProcessingError as e:
             return {"success": False, "error": str(e)}
 
-        return {"success": True, "total": round(precomputed_total, 2), "payment": payment}
+        return {"success": True, **totals, "payment": payment}
     finally:
         session.close()
 
@@ -300,22 +318,31 @@ def finalize_checkout(request: CheckoutFinalizeRequest):
         )
         if error:
             return {"success": False, "error": error}
-        expected_amount = int(round(sum(
+        expected_subtotal = sum(
             item["_computed_price"] * item["quantity"] for item in cart_items
-        ) * 100))
+        )
+        totals = _checkout_totals(expected_subtotal)
+        expected_amount = int(round(totals["total"] * 100))
         if payment["amount"] != expected_amount or payment["amount_received"] != expected_amount:
             return {"success": False, "error": "Payment amount does not match checkout."}
 
         for item in cart_items:
             item.pop("_computed_price", None)
+        checkout_details = _checkout_details_to_order_fields(request, payment)
         order = create_order(
             session,
             customer_id=request.customer_id,
             cart_items=cart_items,
             order_id=order_id,
             status="processing",
-            checkout_details=_checkout_details_to_order_fields(request, payment),
+            checkout_details=checkout_details,
         )
+        order.update({
+            "subtotal": totals["subtotal"],
+            "shipping_total": totals["shipping"],
+            "tax_total": totals["tax"],
+            "total": totals["total"],
+        })
         return {"success": True, "order": order, "payment": payment}
     finally:
         session.close()

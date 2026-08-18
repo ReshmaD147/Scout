@@ -2,6 +2,7 @@ import asyncio
 from types import SimpleNamespace
 
 from scout.agents import supervisor
+from scout.agents.evidence import record_tool_call
 from scout.agents.intent_splitter import StructuredIntent
 from scout.agents.orchestration.turn_context import TurnExecutionContext
 from scout.agents.orchestration.turn_executor import execute_single_intent_turn
@@ -164,6 +165,59 @@ def test_concurrent_structured_intents_do_not_cross_requests(monkeypatch):
     assert ("policy_agent", "What is your return policy?", "policy_question") in seen
     assert ("policy_agent", "What is your shipping policy?", "policy_question") in seen
     assert len(seen) == 2
+
+
+def test_tool_first_recommendation_uses_external_when_internal_misses_explicit_terms(monkeypatch):
+    app = FakeApp()
+    tool_calls = []
+    external_product = {
+        "external_product_id": "EX011",
+        "name": "Red Cocktail Dress",
+        "vendor_name": "Partner Shop",
+        "price": 89.99,
+        "click_url": "/affiliate/click/EX011",
+        "source": "external",
+    }
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        tool_calls.append((tool_name, dict(args), agent_name))
+        if tool_name == "recommend_products":
+            result = [{"product_id": "P001", "name": "Black Midi Dress", "price": 79.99, "source": "internal"}]
+        else:
+            result = [external_product]
+        record_tool_call(tool_name=tool_name, validated_args=args, success=True, result=result, agent_name=agent_name)
+        return result
+
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(products=kwargs["products"]))
+    monkeypatch.setattr(supervisor, "_attempt_targeted_correction", no_correction)
+
+    context = TurnExecutionContext(
+        direct_specialist="recommend_agent",
+        structured_intent=StructuredIntent(
+            text="Do you have red cocktail dresses under $100?",
+            request_type="product_recommendation",
+            confidence=0.96,
+            product_type="dresses",
+            budget_max=100,
+            color="red",
+        ),
+    )
+
+    result = asyncio.run(collect_result(app, "Do you have red cocktail dresses under $100?", context))
+
+    assert ("recommend_products", {"query": "Do you have red cocktail dresses under $100?", "max_price": 100}, "recommend_agent") in tool_calls
+    assert (
+        "search_external_offers",
+        {
+            "query": "Do you have red cocktail dresses under $100?",
+            "category": "dresses",
+            "budget_max": 100,
+            "color": "red",
+        },
+        "external_offer_agent",
+    ) in tool_calls
+    assert result[1] == [external_product]
 
 
 def test_concurrent_inventory_variant_args_stay_with_their_request(monkeypatch):

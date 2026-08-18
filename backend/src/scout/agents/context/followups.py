@@ -54,13 +54,49 @@ def _contextual_split_result(message: str, context: dict | None) -> SplitIntentR
     if context is None:
         return None
 
+    rating_comparison = _resolve_rating_comparison_follow_up(message, context)
+    if rating_comparison is not None:
+        return SplitIntentResult(
+            sub_intents=[rating_comparison.text],
+            structured_intent=rating_comparison,
+            fast_path_used=True,
+            llm_splitter_invoked=False,
+        )
+
+    recommendation_action = _resolve_recommendation_action_follow_up(message, context)
+    if recommendation_action is not None:
+        return SplitIntentResult(
+            sub_intents=[recommendation_action.text],
+            structured_intent=recommendation_action,
+            fast_path_used=True,
+            llm_splitter_invoked=False,
+        )
+
     compound_plan = detect_supported_compound_intent(message)
     if compound_plan is not None and compound_plan.multi_intent:
         return None
 
+    pending_store_follow_up = _resolve_pending_store_location_follow_up(message, context)
+    if pending_store_follow_up is not None:
+        return SplitIntentResult(
+            sub_intents=[pending_store_follow_up.text],
+            structured_intent=pending_store_follow_up,
+            fast_path_used=True,
+            llm_splitter_invoked=False,
+        )
+
     cart_offer_pending = _continue_pending_cart_offer(message, context)
     if cart_offer_pending is not None:
         return cart_offer_pending
+
+    inventory_product_switch = _resolve_inventory_product_switch_follow_up(message, context)
+    if inventory_product_switch is not None:
+        return SplitIntentResult(
+            sub_intents=[inventory_product_switch.text],
+            structured_intent=inventory_product_switch,
+            fast_path_used=True,
+            llm_splitter_invoked=False,
+        )
 
     recommendation_selection = _resolve_recommendation_selection(message, context)
     if recommendation_selection is not None:
@@ -107,8 +143,12 @@ def _continue_pending_cart_offer(message: str, context: dict) -> SplitIntentResu
 
     normalized = (message or "").strip().strip(".!?").lower()
     AFFIRMATIVES = {"yes", "yeah", "yep", "sure", "please", "ok", "okay", "add it", "add to cart"}
+    cart_add_confirmation = re.fullmatch(
+        r"(?:can you |could you |please )?add (?:it|this|that)(?: (?:to|in) (?:my )?cart)?",
+        normalized,
+    )
 
-    if normalized not in AFFIRMATIVES:
+    if normalized not in AFFIRMATIVES and not cart_add_confirmation:
         # A genuine clarifying question about the SAME pending item
         # (e.g. "is it available in medium first?") should PRESERVE the
         # offer, not discard it - the customer hasn't declined, they're
@@ -119,7 +159,8 @@ def _continue_pending_cart_offer(message: str, context: dict) -> SplitIntentResu
         # a cart offer with a relevant question, then confirming).
         clarification_terms = (
             "available", "availability", "stock", "size", "medium",
-            "large", "small", "color", "colour",
+            "large", "small", "color", "colour", "store", "nearby",
+            "pickup", "pick up", "online", "delivery", "shipping", "ship",
         )
         if any(term in normalized for term in clarification_terms):
             return None
@@ -328,9 +369,6 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
     order_follow_up = _resolve_order_follow_up_intent(message, context, base_intent)
     if order_follow_up is not None:
         return order_follow_up
-    pending_store_follow_up = _resolve_pending_store_location_follow_up(message, context)
-    if pending_store_follow_up is not None:
-        return pending_store_follow_up
     is_follow_up = bool(FOLLOW_UP_PRODUCT_RE.search(normalized))
     wants_similar_products = _is_scout_similar_products_request(normalized)
     # Only even consult the recovery-action keyword matcher when there's
@@ -358,8 +396,12 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
     if product == "ambiguous":
         return "Which product should I check?"
 
-    size = (base_intent.size if base_intent else None) or _parse_requested_size(message) or context.get("requested_size")
-    color = (base_intent.color if base_intent else None) or _parse_requested_color(message) or context.get("requested_color")
+    parsed_size = _parse_requested_size(message) or _parse_contextual_size_reference(message, context)
+    parsed_color = _parse_requested_color(message)
+    explicit_size = (base_intent.size if base_intent else None) or parsed_size
+    explicit_color = (base_intent.color if base_intent else None) or parsed_color
+    size = explicit_size or context.get("requested_size")
+    color = explicit_color or context.get("requested_color")
     location = (base_intent.location if base_intent else None) or _parse_requested_store_name(message)
     budget_max = (base_intent.budget_max if base_intent else None) or _parse_max_budget(message) or context.get("requested_budget_max")
     if recovery_action == "best_fulfillment":
@@ -367,6 +409,14 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
     if recovery_action == "similar_products":
         wants_similar_products = True
     if wants_similar_products:
+        if _should_relax_stale_variant_for_similar_search(
+            normalized,
+            context,
+        ):
+            if not parsed_size:
+                size = None
+            if not parsed_color:
+                color = None
         product_name = product.get("name") or context.get("active_product_name") or product["product_id"]
         text = f"Find similar Scout products for product_id {product['product_id']} ({product_name})"
         if context.get("active_category") or (base_intent and base_intent.product_type):
@@ -377,6 +427,8 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
             text += f" size {size}"
         if budget_max is not None:
             text += f" under ${float(budget_max):g}"
+        if "cheaper" in normalized or "less expensive" in normalized:
+            text += " with cheaper options"
         text += "."
         structured = StructuredIntent(
             text=text,
@@ -442,6 +494,84 @@ def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent |
     )
     _record_context_resolution("follow_up_resolution", True, structured)
     return structured
+
+
+def _resolve_inventory_product_switch_follow_up(message: str, context: dict) -> StructuredIntent | None:
+    """Handles turns like "how about Black Midi Dress" while the customer
+    is in an availability thread. In that context, a named product is a
+    request to check the same variant/fulfillment constraints for a
+    different product, not a purchase/cart selection.
+    """
+    normalized = (message or "").lower()
+    if not any(phrase in normalized for phrase in ("how about", "what about")):
+        return None
+    if not _has_active_inventory_context(context):
+        return None
+
+    selected = [
+        item
+        for item in context.get("active_selected_products") or []
+        if isinstance(item, dict) and item.get("product_id") and item.get("name")
+    ]
+    matches = [
+        item
+        for item in selected
+        if _normalize_context_text(item["name"]) in _normalize_context_text(message)
+    ]
+    if len(matches) != 1:
+        return None
+
+    product = matches[0]
+    size = context.get("requested_size")
+    color = context.get("requested_color")
+    location = _parse_requested_store_name(message) or context.get("requested_store")
+    wants_delivery = any(term in normalized for term in ("online", "delivery", "shipping", "ship"))
+    wants_store = any(term in normalized for term in ("store", "nearby", "pickup", "pick up")) or bool(location)
+    request_type = "store_availability" if wants_store else "inventory_availability"
+    if wants_delivery:
+        request_type = "inventory_availability"
+
+    product_name = product.get("name") or product["product_id"]
+    if request_type == "store_availability":
+        text = f"Check pickup availability for product_id {product['product_id']} ({product_name})"
+        if location:
+            text += f" at {location}"
+    elif wants_delivery:
+        text = f"Check online or delivery availability for product_id {product['product_id']} ({product_name})"
+    else:
+        text = f"Check stock for product_id {product['product_id']} ({product_name})"
+    if size:
+        text += f" in size {size}"
+    if color:
+        text += f" color {color}"
+    text += "."
+
+    context["active_product_id"] = product["product_id"]
+    context["active_product_name"] = product_name
+    structured = StructuredIntent(
+        text=text,
+        request_type=request_type,
+        confidence=0.96,
+        product_type=context.get("active_category"),
+        size=size,
+        color=color,
+        location=location if request_type == "store_availability" else None,
+        product_id=product["product_id"],
+        fulfillment_preference="delivery" if wants_delivery else "pickup" if request_type == "store_availability" else None,
+        extraction_source="deterministic_inventory_product_switch",
+    )
+    _record_context_resolution("inventory_product_switch_follow_up", True, structured)
+    return structured
+
+
+def _has_active_inventory_context(context: dict) -> bool:
+    return bool(
+        context.get("requested_size")
+        or context.get("requested_color")
+        or context.get("requested_store")
+        or context.get("pending_store_availability_product_id")
+        or context.get("last_out_of_stock_product_id")
+    )
 
 
 def _resolve_pending_store_location_follow_up(message: str, context: dict) -> StructuredIntent | None:
@@ -606,6 +736,205 @@ def _resolve_ordinal_reference(message: str, selected: list[dict]) -> dict | Non
     return None
 
 
+def _safe_rating(value) -> float | None:
+    try:
+        rating = float(value)
+    except (TypeError, ValueError):
+        return None
+    return rating if rating > 0 else None
+
+
+def _resolve_rating_comparison_follow_up(message: str, context: dict) -> StructuredIntent | None:
+    normalized = (message or "").lower()
+    if not (
+        ("rated" in normalized or "rating" in normalized)
+        and any(term in normalized for term in ("which", "better", "highest", "these", "them"))
+    ):
+        return None
+    products = [
+        product
+        for product in context.get("active_selected_products") or []
+        if isinstance(product, dict) and product.get("product_id") and _safe_rating(product.get("rating")) is not None
+    ]
+    if len(products) < 2:
+        return None
+    best = max(products, key=lambda product: (_safe_rating(product.get("rating")) or 0, product.get("name") or ""))
+    best_name = best.get("name") or best["product_id"]
+    best_rating = _safe_rating(best.get("rating"))
+    compared = [
+        f"{product.get('name') or product['product_id']} is rated {_safe_rating(product.get('rating')):.1f}"
+        for product in products[:3]
+    ]
+    reply = f"{best_name} is better rated at {best_rating:.1f}. " + "; ".join(compared) + "."
+    return StructuredIntent(
+        text=reply,
+        request_type="rating_comparison",
+        confidence=0.98,
+        extraction_source="deterministic_rating_comparison",
+    )
+
+
+def _safe_price(value) -> float | None:
+    try:
+        price = float(value)
+    except (TypeError, ValueError):
+        return None
+    return price if price >= 0 else None
+
+
+def _sale_price(product: dict) -> float | None:
+    promotion = product.get("promotion")
+    if isinstance(promotion, dict):
+        return _safe_price(promotion.get("discounted_price"))
+    return None
+
+
+def _effective_price(product: dict) -> float | None:
+    return _sale_price(product) or _safe_price(product.get("price"))
+
+
+def _format_money(value: float | None) -> str:
+    return f"${value:.2f}" if value is not None else "the listed price"
+
+
+def _selected_recommendation_products(context: dict) -> list[dict]:
+    return [
+        product
+        for product in context.get("active_selected_products") or []
+        if isinstance(product, dict) and (product.get("product_id") or product.get("external_product_id"))
+    ]
+
+
+def _product_key(product: dict) -> str:
+    return product.get("product_id") or product.get("external_product_id") or "this item"
+
+
+def _product_name(product: dict) -> str:
+    return product.get("name") or _product_key(product)
+
+
+def _compare_current_recommendations_reply(products: list[dict]) -> str:
+    if len(products) < 2:
+        return "I can compare them — which other item should I use?"
+    first, second = products[:2]
+    first_name = _product_name(first)
+    second_name = _product_name(second)
+    first_rating = _safe_rating(first.get("rating"))
+    second_rating = _safe_rating(second.get("rating"))
+    first_price = _effective_price(first)
+    second_price = _effective_price(second)
+    if first.get("source") == "external" or second.get("source") == "external":
+        first_vendor = f" from {first['vendor_name']}" if first.get("vendor_name") else ""
+        second_vendor = f" from {second['vendor_name']}" if second.get("vendor_name") else ""
+        cheaper = None
+        if first_price is not None and second_price is not None:
+            cheaper = first if first_price <= second_price else second
+        reply = (
+            f"Of course — here’s the quick comparison: {first_name}{first_vendor} is {_format_money(first_price)}, "
+            f"and {second_name}{second_vendor} is {_format_money(second_price)}."
+        )
+        if cheaper:
+            reply += f" {_product_name(cheaper)} is the lower-priced option."
+        reply += " Since these are outside retailers, please confirm sizing, shipping, and returns on their site before buying."
+        return reply
+    lines = [
+        f"Of course — here’s the quick version: {first_name} is {_format_money(first_price)}, and {second_name} is {_format_money(second_price)}."
+    ]
+    if first_rating is not None and second_rating is not None:
+        better = first if first_rating >= second_rating else second
+        lines.append(f"{_product_name(better)} is better rated at {max(first_rating, second_rating):.1f}.")
+    if first_price is not None and second_price is not None:
+        cheaper = first if first_price <= second_price else second
+        lines.append(f"{_product_name(cheaper)} is the cheaper pick.")
+    return " ".join(lines)
+
+
+def _cheaper_current_recommendations_reply(products: list[dict]) -> str | None:
+    priced = [product for product in products if _effective_price(product) is not None]
+    if len(priced) < 2:
+        return None
+    cheapest = min(priced, key=lambda product: _effective_price(product) or 10_000)
+    price = _safe_price(cheapest.get("price"))
+    sale = _sale_price(cheapest)
+    price_text = _format_money(price)
+    if sale is not None and price is not None and sale < price:
+        price_text = f"{price_text}, with a sale price of {_format_money(sale)}"
+    if cheapest.get("source") == "external":
+        vendor = f" from {cheapest['vendor_name']}" if cheapest.get("vendor_name") else ""
+        return (
+            f"Good question — {_product_name(cheapest)}{vendor} is the lowest-priced outside option I’m showing at {price_text}. "
+            "Because it’s from another retailer, please confirm the final price and availability on their site."
+        )
+    return (
+        f"Good question — {_product_name(cheapest)} is already the cheapest of these at {price_text}. "
+        "I don’t see a cheaper similar Scout option in this set, but I can look with a lower budget if you want."
+    )
+
+
+def _resolve_recommendation_action_follow_up(message: str, context: dict) -> StructuredIntent | None:
+    normalized = (message or "").lower()
+    products = _selected_recommendation_products(context)
+    complex_follow_up = " and " in normalized and any(
+        term in normalized
+        for term in ("check", "store", "stores", "available", "availability", "pickup", "pick up")
+    )
+    if len(products) >= 2 and "compare" in normalized and not complex_follow_up:
+        return StructuredIntent(
+            text=_compare_current_recommendations_reply(products),
+            request_type="recommendation_action_reply",
+            confidence=0.98,
+            extraction_source="deterministic_recommendation_action",
+        )
+    if "cheaper" in normalized and "similar" in normalized:
+        reply = _cheaper_current_recommendations_reply(products)
+        if reply:
+            return StructuredIntent(
+                text=reply,
+                request_type="recommendation_action_reply",
+                confidence=0.98,
+                extraction_source="deterministic_recommendation_action",
+            )
+    if "scout catalog options only" in normalized or "lumi picks" in normalized:
+        if any(product.get("source") == "external" for product in products):
+            product_type = context.get("active_category") or "items"
+            color = context.get("requested_color")
+            budget = context.get("requested_budget_max")
+            description = "Lumi"
+            if color:
+                description += f" {color}"
+            description += f" {product_type}"
+            if budget is not None:
+                description += f" under ${float(budget):g}"
+            return StructuredIntent(
+                text=(
+                    f"I checked Lumi’s own catalog for {description}, but I don’t see a matching item right now. "
+                    "The outside options above are separate retailer offers, so you would complete those purchases on their sites."
+                ),
+                request_type="recommendation_action_reply",
+                confidence=0.98,
+                extraction_source="deterministic_external_catalog_only_followup",
+            )
+        product_type = context.get("active_category") or "products"
+        color = context.get("requested_color")
+        budget = context.get("requested_budget_max")
+        text = "Show Scout catalog options only"
+        if color:
+            text += f" for {color}"
+        text += f" {product_type}"
+        if budget is not None:
+            text += f" under ${float(budget):g}"
+        return StructuredIntent(
+            text=text,
+            request_type="product_recommendation",
+            confidence=0.94,
+            product_type=product_type,
+            budget_max=float(budget) if budget is not None else None,
+            color=color,
+            extraction_source="deterministic_catalog_only_followup",
+        )
+    return None
+
+
 def _resolve_context_product(message: str, context: dict) -> dict | str | None:
     selected = [item for item in context.get("active_selected_products") or [] if isinstance(item, dict) and item.get("product_id")]
     normalized_message = _normalize_context_text(message)
@@ -643,6 +972,39 @@ def _resolve_context_product(message: str, context: dict) -> dict | str | None:
         return {"product_id": active_id, "name": context.get("active_product_name")}
     if len(selected) == 1 and FOLLOW_UP_PRODUCT_RE.search(message or ""):
         return selected[0]
+    return None
+
+
+def _should_relax_stale_variant_for_similar_search(
+    normalized_message: str,
+    context: dict,
+) -> bool:
+    if not context.get("last_out_of_stock_product_id"):
+        return False
+    if not (context.get("requested_size") or context.get("requested_color")):
+        return False
+    recovery_terms = (
+        "similar",
+        "something else",
+        "anything else",
+        "other option",
+        "other options",
+        "another option",
+        "cheaper",
+        "alternative",
+        "alternatives",
+        "like this",
+        "like it",
+    )
+    return any(term in normalized_message for term in recovery_terms)
+
+
+def _parse_contextual_size_reference(customer_message: str, context: dict) -> str | None:
+    if not context.get("requested_size"):
+        return None
+    lower = (customer_message or "").lower()
+    if re.search(r"\b(?:that|same|this)\s+size\b|\bin\s+that\s+size\b", lower):
+        return context.get("requested_size")
     return None
 
 

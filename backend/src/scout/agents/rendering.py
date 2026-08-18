@@ -277,7 +277,7 @@ def _render_reply(
         return " ".join(_unique(request_specific or inventory_sentences))
 
     sentences = []
-    sentences.extend(_product_sentences(rendered_products))
+    sentences.extend(_product_sentences(rendered_products, customer_message))
     sentences.extend(inventory_sentences)
     sentences.extend(_order_sentences(approved_claims))
     sentences.extend(_policy_sentences(approved_claims))
@@ -288,12 +288,12 @@ def _render_reply(
     return _fallback_for_claims(approved_claims, customer_message)
 
 
-def _product_sentences(products: list[dict]) -> list[str]:
+def _product_sentences(products: list[dict], customer_message: str = "") -> list[str]:
     sentences = []
     internal_products = [product for product in products if product.get("source") != "external"]
     external_products = [product for product in products if product.get("source") == "external"]
     if internal_products:
-        sentences.extend(_internal_product_summary_sentences(internal_products))
+        sentences.extend(_internal_product_summary_sentences(internal_products, customer_message))
     if external_products:
         sentences.extend(_external_product_summary_sentences(external_products))
     return sentences
@@ -332,7 +332,7 @@ def _external_offer_phrase(product: dict) -> str:
     return phrase
 
 
-def _internal_product_summary_sentences(products: list[dict]) -> list[str]:
+def _internal_product_summary_sentences(products: list[dict], customer_message: str = "") -> list[str]:
     if len(products) == 1:
         product = products[0]
         sentence = f"We have the {product['name']}"
@@ -347,18 +347,26 @@ def _internal_product_summary_sentences(products: list[dict]) -> list[str]:
 
     priced = [product for product in products if "price" in product]
     if len(priced) == len(products):
-        return [_product_list_summary(products)]
+        return [_product_list_summary(products, customer_message)]
 
     return [f"Here are {len(products)} options from our catalog: {_product_name_list(products)}."]
 
 
-def _product_list_summary(products: list[dict]) -> str:
+def _product_list_summary(products: list[dict], customer_message: str = "") -> str:
     category = _summary_product_category(products)
-    phrase = f"I found {len(products)} {category} in our catalog: "
+    if _is_comparison_request(customer_message):
+        phrase = f"Of course — here’s a quick comparison of {len(products)} {category}: "
+    else:
+        phrase = f"I found {len(products)} {category} in our catalog: "
     phrase += _join_phrases([f"{product['name']} for {_format_money(product['price'])}" for product in products])
     if all(isinstance(product.get("promotion"), dict) and product["promotion"].get("discounted_price") is not None for product in products):
         phrase += ". Sale prices are shown on the cards"
     return phrase + "."
+
+
+def _is_comparison_request(customer_message: str) -> bool:
+    message = (customer_message or "").lower()
+    return any(term in message for term in ("compare", " vs ", "versus", "which one is better", "pick the best"))
 
 
 def _summary_product_category(products: list[dict]) -> str:
@@ -679,7 +687,7 @@ def _store_has_general_inventory_but_variant_unavailable_sentence(variant: dict,
 
 
 def _variant_unavailable_next_actions_sentence() -> str:
-    return "I can check nearby stores, check online or delivery availability, or find similar products."
+    return "Want me to check a nearby store or find a similar option in that size?"
 
 
 def _product_label(product_name: str | None) -> str:

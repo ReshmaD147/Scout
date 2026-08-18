@@ -452,7 +452,7 @@ def test_similar_products_no_match_special_reply_matches_streaming(monkeypatch):
     )
 
     assert stream_result == (non_reply, non_products)
-    assert non_reply == "I couldn’t find a matching alternative to Black Midi Dress matching black, medium."
+    assert non_reply == "I don’t see another close alternative to Black Midi Dress right now."
     assert non_products == []
 
 

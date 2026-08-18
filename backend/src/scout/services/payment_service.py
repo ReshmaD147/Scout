@@ -1,4 +1,5 @@
 import os
+from collections.abc import Mapping
 
 import stripe
 from dotenv import load_dotenv
@@ -15,6 +16,18 @@ class PaymentProcessingError(Exception):
     type instead of needing to know about Stripe's internal error
     hierarchy.
     """
+
+
+def _stripe_metadata_to_dict(metadata) -> dict[str, str]:
+    if not metadata:
+        return {}
+    if isinstance(metadata, Mapping):
+        return dict(metadata)
+    if hasattr(metadata, "to_dict_recursive"):
+        return dict(metadata.to_dict_recursive())
+    if hasattr(metadata, "to_dict"):
+        return dict(metadata.to_dict())
+    return {}
 
 
 def create_test_payment(
@@ -58,7 +71,7 @@ def create_test_payment(
             amount=amount_cents,
             currency="usd",
             description=description,
-            automatic_payment_methods={"enabled": True},
+            payment_method_types=["card"],
             confirm=False,
             metadata=metadata or {},
             receipt_email=receipt_email,
@@ -94,6 +107,6 @@ def retrieve_test_payment(payment_intent_id: str) -> dict:
         "amount_received": intent.amount_received,
         "currency": intent.currency,
         "status": intent.status,
-        "metadata": dict(intent.metadata or {}),
+        "metadata": _stripe_metadata_to_dict(intent.metadata),
         "receipt_email": getattr(intent, "receipt_email", None),
     }

@@ -130,6 +130,68 @@ def test_followup_available_medium_resolves_active_product_and_bypasses_supervis
     assert captured == {"tool_name": "stock", "args": {"product_id": "P001", "size": "M"}, "agent_name": "inventory_agent"}
 
 
+def test_available_variant_followup_can_be_confirmed_into_cart(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P001",
+        "active_product_name": "Black Midi Dress",
+        "active_selected_products": [{"product_id": "P001", "name": "Black Midi Dress"}],
+        "requested_color": "black",
+    }
+    claims = [
+        claim(ClaimType.PRODUCT_IDENTITY.value, "P001", "name", "Black Midi Dress", "cl_name"),
+        claim(ClaimType.INVENTORY_AVAILABILITY.value, "product:P001:size:L:color:black", "in_stock", True, "cl_stock"),
+    ]
+    added = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        return {"in_stock": True}
+
+    def fake_add_to_cart(session, **kwargs):
+        added.update(kwargs)
+        return {
+            "success": True,
+            "name": "Black Midi Dress",
+            "size": kwargs["size"],
+            "color": kwargs["color"],
+        }
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="The Black Midi Dress has 3 units available in black, large.", claims=claims))
+    monkeypatch.setattr(supervisor, "add_to_cart_service", fake_add_to_cart)
+
+    asyncio.run(supervisor.ask(app, [], "Is it available in large?", conversation_context=context))
+
+    assert context["pending_cart_offer"] == {
+        "product_id": "P001",
+        "product_name": "Black Midi Dress",
+        "size": "L",
+        "color": "black",
+        "quantity": 1,
+        "recommendation_id": None,
+        "recommendation_session_id": None,
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(app, [], "can you add it in cart?", conversation_context=context)
+    )
+
+    assert reply == (
+        "Done — I added the Black Midi Dress in large, black to your cart. "
+        "You can review your cart when you’re ready to check out."
+    )
+    assert products == []
+    assert added == {
+        "product_id": "P001",
+        "quantity": 1,
+        "size": "L",
+        "color": "black",
+        "recommendation_id": None,
+        "recommendation_session_id": None,
+    }
+
+
 def test_resolved_followup_pickup_preserves_product_size_and_store(monkeypatch):
     app = App()
     context = {
@@ -212,6 +274,87 @@ def test_zip_reply_continues_pending_nearby_store_check(monkeypatch):
     }
     assert context["requested_store"] == "55678"
     assert context["pending_store_availability_product_id"] is None
+
+
+def test_named_store_reply_continues_pending_nearby_store_check(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P001",
+        "active_product_name": "Black Midi Dress",
+        "active_selected_products": [
+            {"product_id": "P001", "name": "Black Midi Dress"},
+            {"product_id": "P004", "name": "Slip Dress"},
+        ],
+        "requested_size": "M",
+        "requested_color": "black",
+        "pending_store_availability_product_id": "P001",
+        "pending_cart_offer": {
+            "product_id": "P001",
+            "product_name": "Black Midi Dress",
+            "size": None,
+            "color": None,
+            "quantity": 1,
+            "recommendation_id": None,
+        },
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Store verified."))
+
+    asyncio.run(supervisor.ask(app, [], "Maple Grove store", conversation_context=context))
+
+    assert captured == {
+        "tool_name": "stores",
+        "args": {"product_id": "P001", "store_name": "Maple Grove store", "size": "M", "color": "black"},
+        "agent_name": "inventory_agent",
+    }
+    assert context["requested_store"] == "Maple Grove store"
+    assert context["pending_store_availability_product_id"] is None
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_how_about_named_product_in_inventory_thread_checks_availability_not_cart(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P004",
+        "active_product_name": "Slip Dress",
+        "active_selected_products": [
+            {"product_id": "P001", "name": "Black Midi Dress"},
+            {"product_id": "P004", "name": "Slip Dress"},
+        ],
+        "requested_size": "M",
+        "requested_color": "black",
+        "last_out_of_stock_product_id": "P004",
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Inventory verified."))
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(app, [], "how about Black Midi Dress", conversation_context=context)
+    )
+
+    assert reply == "Inventory verified."
+    assert products == []
+    assert captured == {
+        "tool_name": "stock",
+        "args": {"product_id": "P001", "size": "M", "color": "black"},
+        "agent_name": "inventory_agent",
+    }
+    assert context["active_product_id"] == "P001"
+    assert context["active_product_name"] == "Black Midi Dress"
+    assert context.get("pending_cart_offer") is None
+    assert app.scout_specialists["recommend_agent"].calls == 0
 
 
 def test_named_store_followup_preserves_exact_variant(monkeypatch):
@@ -652,7 +795,7 @@ def test_check_another_store_with_known_store_preserves_exact_variant(monkeypatc
     assert app.scout_specialists["inventory_agent"].calls == 0
 
 
-def test_find_similar_followup_preserves_category_variant_and_budget(monkeypatch):
+def test_find_similar_followup_relaxes_stale_unavailable_variant(monkeypatch):
     app = App()
     context = {
         "active_product_id": "P001",
@@ -686,6 +829,352 @@ def test_find_similar_followup_preserves_category_variant_and_budget(monkeypatch
         "tool_name": "alternatives",
         "args": {
             "product_id": "P001",
+            "limit": 3,
+            "max_price": 80.0,
+            "category": "dresses",
+        },
+        "agent_name": "recommend_agent",
+    }
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_find_similar_followup_keeps_explicit_variant(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P001",
+        "active_product_name": "Black Midi Dress",
+        "active_category": "dresses",
+        "active_selected_products": [{"product_id": "P001", "name": "Black Midi Dress", "category": "dresses"}],
+        "requested_size": "M",
+        "requested_color": "black",
+        "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P001",
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Similar products verified."))
+
+    asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Find similar black dresses in medium",
+            conversation_context=context,
+        )
+    )
+
+    assert captured == {
+        "tool_name": "alternatives",
+        "args": {
+            "product_id": "P001",
+            "limit": 3,
+            "size": "M",
+            "color": "black",
+            "max_price": 80.0,
+            "category": "dresses",
+        },
+        "agent_name": "recommend_agent",
+    }
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_find_similar_in_that_size_relaxes_stale_color(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P004",
+        "active_product_name": "Slip Dress",
+        "active_category": "dresses",
+        "active_selected_products": [{"product_id": "P004", "name": "Slip Dress", "category": "dresses"}],
+        "requested_size": "M",
+        "requested_color": "black",
+        "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P004",
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="Similar products verified."))
+
+    asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "find similar option in that size",
+            conversation_context=context,
+        )
+    )
+
+    assert captured == {
+        "tool_name": "alternatives",
+        "args": {
+            "product_id": "P004",
+            "limit": 3,
+            "size": "M",
+            "max_price": 80.0,
+            "category": "dresses",
+        },
+        "agent_name": "recommend_agent",
+    }
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_better_rated_followup_answers_from_active_recommendations_without_model():
+    app = App()
+    context = {
+        "active_selected_products": [
+            {"product_id": "P004", "name": "Slip Dress", "price": 62.50, "rating": 3.9},
+            {"product_id": "P001", "name": "Black Midi Dress", "price": 79.99, "rating": 4.3},
+        ],
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Which of these is better rated?",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == "Black Midi Dress is better rated at 4.3. Slip Dress is rated 3.9; Black Midi Dress is rated 4.3."
+    assert products == []
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_compare_button_answers_from_active_recommendations_without_model():
+    app = App()
+    context = {
+        "active_selected_products": [
+            {
+                "product_id": "P004",
+                "name": "Slip Dress",
+                "price": 62.50,
+                "rating": 3.9,
+                "promotion": {"discounted_price": 53.12},
+            },
+            {
+                "product_id": "P001",
+                "name": "Black Midi Dress",
+                "price": 79.99,
+                "rating": 4.3,
+                "promotion": {"discounted_price": 67.99},
+            },
+        ],
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Compare Slip Dress and Black Midi Dress",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == (
+        "Of course — here’s the quick version: Slip Dress is $53.12, and Black Midi Dress is $67.99. "
+        "Black Midi Dress is better rated at 4.3. Slip Dress is the cheaper pick."
+    )
+    assert products == []
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_cheaper_button_answers_from_active_recommendations_without_model():
+    app = App()
+    context = {
+        "active_selected_products": [
+            {
+                "product_id": "P001",
+                "name": "Black Midi Dress",
+                "price": 79.99,
+                "rating": 4.3,
+                "promotion": {"discounted_price": 67.99},
+            },
+            {
+                "product_id": "P004",
+                "name": "Slip Dress",
+                "price": 62.50,
+                "rating": 3.9,
+                "promotion": {"discounted_price": 53.12},
+            },
+        ],
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Show cheaper similar options",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == (
+        "Good question — Slip Dress is already the cheapest of these at $62.50, with a sale price of $53.12. "
+        "I don’t see a cheaper similar Scout option in this set, but I can look with a lower budget if you want."
+    )
+    assert products == []
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_external_compare_button_answers_from_external_cards_without_model():
+    app = App()
+    context = {
+        "active_selected_products": [
+            {
+                "external_product_id": "EX011",
+                "name": "Enid Satin Body-Con Evening Dress",
+                "vendor_name": "Nordstrom Rack",
+                "source": "external",
+                "price": 35.98,
+            },
+            {
+                "external_product_id": "EX009",
+                "name": "Twist-Front Midi Dress",
+                "vendor_name": "Target",
+                "source": "external",
+                "price": 45.00,
+            },
+        ],
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Compare Enid Satin Body-Con Evening Dress and Twist-Front Midi Dress",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == (
+        "Of course — here’s the quick comparison: Enid Satin Body-Con Evening Dress from Nordstrom Rack is $35.98, "
+        "and Twist-Front Midi Dress from Target is $45.00. Enid Satin Body-Con Evening Dress is the lower-priced option. "
+        "Since these are outside retailers, please confirm sizing, shipping, and returns on their site before buying."
+    )
+    assert products == []
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_external_cheaper_button_answers_from_external_cards_without_model():
+    app = App()
+    context = {
+        "active_selected_products": [
+            {
+                "external_product_id": "EX011",
+                "name": "Enid Satin Body-Con Evening Dress",
+                "vendor_name": "Nordstrom Rack",
+                "source": "external",
+                "price": 35.98,
+            },
+            {
+                "external_product_id": "EX009",
+                "name": "Twist-Front Midi Dress",
+                "vendor_name": "Target",
+                "source": "external",
+                "price": 45.00,
+            },
+        ],
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Show cheaper similar options",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == (
+        "Good question — Enid Satin Body-Con Evening Dress from Nordstrom Rack is the lowest-priced outside option I’m showing at $35.98. "
+        "Because it’s from another retailer, please confirm the final price and availability on their site."
+    )
+    assert products == []
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+
+
+def test_catalog_only_button_answers_honestly_from_external_context():
+    app = App()
+    context = {
+        "active_category": "dresses",
+        "requested_color": "red",
+        "requested_budget_max": 100,
+        "active_selected_products": [
+            {"external_product_id": "EX011", "name": "Red Cocktail Dress", "source": "external", "price": 89.99},
+        ],
+    }
+
+    reply, _history, products = asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "Show Lumi picks",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == (
+        "I checked Lumi’s own catalog for Lumi red dresses under $100, but I don’t see a matching item right now. "
+        "The outside options above are separate retailer offers, so you would complete those purchases on their sites."
+    )
+    assert products == []
+    assert app.graph_calls == 0
+    assert app.scout_specialists["recommend_agent"].calls == 0
+    assert app.scout_specialists["external_offer_agent"].calls == 0
+
+
+def test_find_similar_in_black_same_size_keeps_explicit_variant(monkeypatch):
+    app = App()
+    context = {
+        "active_product_id": "P004",
+        "active_product_name": "Slip Dress",
+        "active_category": "dresses",
+        "active_selected_products": [{"product_id": "P004", "name": "Slip Dress", "category": "dresses"}],
+        "requested_size": "M",
+        "requested_color": "black",
+        "requested_budget_max": 80,
+        "last_out_of_stock_product_id": "P004",
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+    monkeypatch.setattr(supervisor, "_finalize_verified_response", lambda **kwargs: finalized(reply="No exact match."))
+
+    asyncio.run(
+        supervisor.ask(
+            app,
+            [],
+            "do you have similar option in black in same size?",
+            conversation_context=context,
+        )
+    )
+
+    assert captured == {
+        "tool_name": "alternatives",
+        "args": {
+            "product_id": "P004",
             "limit": 3,
             "size": "M",
             "color": "black",
@@ -726,8 +1215,6 @@ def test_show_me_something_similar_routes_to_alternatives(monkeypatch):
         "args": {
             "product_id": "P001",
             "limit": 3,
-            "size": "M",
-            "color": "black",
             "max_price": 80.0,
             "category": "dresses",
         },
@@ -766,8 +1253,6 @@ def test_similar_product_paraphrases_route_to_alternatives(monkeypatch):
             "args": {
                 "product_id": "P001",
                 "limit": 3,
-                "size": "M",
-                "color": "black",
                 "max_price": 80.0,
                 "category": "dresses",
             },
@@ -800,8 +1285,8 @@ def test_find_similar_black_medium_no_scout_results_returns_clear_message(monkey
         )
     )
 
-    assert reply == "I couldn’t find a matching alternative to Black Midi Dress matching black, medium, under $80."
-    assert products == []
+    assert "Wrap Dress" in reply
+    assert [product["product_id"] for product in products] == ["P002", "P003", "P004"]
     assert app.graph_calls == 0
     assert app.scout_specialists["recommend_agent"].calls == 0
 
@@ -1059,7 +1544,7 @@ def test_hiking_followup_merges_pending_context_and_routes_recommend(monkeypatch
 
     async def fake_tool(tool_name, args, *, agent_name):
         captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
-        return [{"product_id": "P999", "name": "Trail Runner", "price": 89.99}]
+        return [{"product_id": "P999", "name": "Trail Runner", "price": 89.99, "tags": "hiking trail"}]
 
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
     monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)

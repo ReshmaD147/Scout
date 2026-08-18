@@ -204,7 +204,65 @@ SIZE_NAMES_TURN = {
 }
 
 
-def _similar_products_no_match_reply(structured_intent: StructuredIntent) -> str:
+def _safe_float(value) -> float | None:
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def _effective_product_price(product: dict) -> float | None:
+    promotion = product.get("promotion") if isinstance(product, dict) else None
+    if isinstance(promotion, dict):
+        sale_price = _safe_float(promotion.get("discounted_price"))
+        if sale_price is not None:
+            return sale_price
+    return _safe_float(product.get("price") if isinstance(product, dict) else None)
+
+
+def _price_summary(product: dict) -> str:
+    price = _safe_float(product.get("price"))
+    promotion = product.get("promotion")
+    sale_price = _safe_float(promotion.get("discounted_price")) if isinstance(promotion, dict) else None
+    if price is not None and sale_price is not None and sale_price < price:
+        return f"${price:.2f}, with a sale price of ${sale_price:.2f}"
+    if price is not None:
+        return f"${price:.2f}"
+    if sale_price is not None:
+        return f"${sale_price:.2f}"
+    return "the lowest price in this set"
+
+
+def _cheaper_products_no_match_reply(structured_intent: StructuredIntent, conversation_context: dict | None) -> str | None:
+    if "cheaper" not in (structured_intent.text or "").lower():
+        return None
+    selected = [
+        product
+        for product in (conversation_context or {}).get("active_selected_products") or []
+        if isinstance(product, dict) and product.get("product_id") and _effective_product_price(product) is not None
+    ]
+    if len(selected) < 2:
+        return None
+    cheapest = min(selected, key=lambda product: _effective_product_price(product) or 10_000)
+    product_name = cheapest.get("name") or "one of these"
+    budget_phrase = (
+        f" under ${structured_intent.budget_max:g}"
+        if structured_intent.budget_max is not None
+        else ""
+    )
+    return (
+        f"{product_name} is already the cheapest of these at {_price_summary(cheapest)}. "
+        f"I don’t see another similar option{budget_phrase} right now, but I can keep looking with a lower budget."
+    )
+
+
+def _similar_products_no_match_reply(
+    structured_intent: StructuredIntent,
+    conversation_context: dict | None = None,
+) -> str:
+    cheaper_reply = _cheaper_products_no_match_reply(structured_intent, conversation_context)
+    if cheaper_reply:
+        return cheaper_reply
     product_name = "that item"
     match = re.search(r"\(([^)]+)\)", structured_intent.text or "")
     if match and match.group(1).strip():
@@ -217,8 +275,9 @@ def _similar_products_no_match_reply(structured_intent: StructuredIntent) -> str
         constraints.append(natural_size)
     if structured_intent.budget_max is not None:
         constraints.append(f"under ${structured_intent.budget_max:g}")
-    constraint_text = f" matching {', '.join(constraints)}" if constraints else ""
-    return f"I couldn’t find a matching alternative to {product_name}{constraint_text}."
+    if constraints:
+        return f"I don’t see another option like {product_name} that matches {', '.join(constraints)} right now."
+    return f"I don’t see another close alternative to {product_name} right now."
 
 
 async def _run_supervisor_turn_streaming(app, history: list[dict], messages_before: int) -> tuple[list, bool] | None:
@@ -312,13 +371,17 @@ async def execute_single_intent_turn(
                     yield ("progress", "searching_products")
                 elif direct_specialist == "inventory_agent":
                     yield ("progress", "checking_inventory")
-            if await _run_tool_first_if_possible(
+            tool_first_result = await _run_tool_first_if_possible(
                 structured_intent=structured_intent,
                 sub_intent=sub_intent,
                 agent_name=direct_specialist,
-            ):
+            )
+            if tool_first_result:
                 new_messages = []
-                had_external_handoff = direct_specialist == "external_offer_agent"
+                had_external_handoff = (
+                    direct_specialist == "external_offer_agent"
+                    or tool_first_result == "external_handoff"
+                )
             else:
                 with timed_stage("direct_specialist_invocation", selected_specialist=direct_specialist):
                     new_messages, had_external_handoff = await _run_direct_specialist_turn(
@@ -433,7 +496,7 @@ async def execute_single_intent_turn(
             and _alternatives_no_match(evidence_entries)
         ):
             finalized = FinalizedResponse(
-                reply=_similar_products_no_match_reply(structured_intent),
+                reply=_similar_products_no_match_reply(structured_intent, conversation_context),
                 products=[],
                 proposed_claims=finalized.proposed_claims,
                 verification_result=finalized.verification_result,

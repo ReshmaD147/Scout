@@ -77,6 +77,7 @@ function FeedbackIcon({ direction }) {
 const STARTER_PROMPTS = [
   { text: "Recommend a dress under $80", Icon: DressIcon },
   { text: "Is the black dress available in medium?", Icon: StoreIcon },
+  { text: "Do you have a red cocktail dress under $100?", Icon: DressIcon },
   { text: "Where is order O1001?", Icon: CompareIcon },
 ];
 
@@ -376,7 +377,14 @@ function refinementPrompts(products, userMessage = "") {
   const hasInternalProducts = products.some((product) => product.source !== "external");
 
   if (external) {
-    addUniquePrompt(prompts, { label: "Show Lumi picks", message: "Show Scout catalog options only" });
+    addUniquePrompt(prompts, { label: "Show Lumi picks", message: "Show Lumi picks" });
+    if (hasMultipleProducts && !isCompareRequest) {
+      addUniquePrompt(prompts, {
+        label: productNames.length > 1 ? `Compare ${productNames[0]} vs ${productNames[1]}` : "Compare these options",
+        message: `Compare ${compareTarget}`,
+      });
+    }
+    return prompts.slice(0, 4);
   }
 
   if (hasMultipleProducts && !isCompareRequest) {
@@ -709,7 +717,7 @@ export default function ChatWidget() {
                 )}
               </div>
 
-              {msg.role === "assistant" && (
+              {msg.role === "assistant" && !(msg.products && msg.products.length > 0) && (
                 <div className="chat-widget-feedback" aria-label="Rate this response">
                   <button
                     type="button"

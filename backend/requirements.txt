@@ -11,6 +11,7 @@ stripe
 python-multipart
 sse-starlette
 python-dotenv
+psycopg[binary]
 langchain-mcp-adapters
 mcp
 langchain-ollama

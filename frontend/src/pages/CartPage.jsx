@@ -10,6 +10,9 @@ import { formatProductDisplayName } from "../components/productDisplay";
 import "./CartPage.css";
 
 const API_BASE = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
+const SHIPPING_FREE_THRESHOLD = 75;
+const STANDARD_SHIPPING_FEE = 5.99;
+const MINNESOTA_MERCHANDISE_TAX_RATE = 0.06875;
 
 function resolveImageUrl(url) {
   if (!url) return url;
@@ -35,27 +38,27 @@ function AddressFields({ title, address, onChange }) {
       <legend>{title}</legend>
       <label className="cart-field cart-field--full">
         <span>Full name</span>
-        <input value={address.full_name} onChange={(e) => update("full_name", e.target.value)} autoComplete="name" />
+        <input value={address.full_name} onChange={(e) => update("full_name", e.target.value)} autoComplete="name" placeholder="Demo Customer" />
       </label>
       <label className="cart-field cart-field--full">
         <span>Address line 1</span>
-        <input value={address.address_line1} onChange={(e) => update("address_line1", e.target.value)} autoComplete="address-line1" />
+        <input value={address.address_line1} onChange={(e) => update("address_line1", e.target.value)} autoComplete="address-line1" placeholder="123 Main Street" />
       </label>
       <label className="cart-field cart-field--full">
         <span>Address line 2 <small>optional</small></span>
-        <input value={address.address_line2} onChange={(e) => update("address_line2", e.target.value)} autoComplete="address-line2" />
+        <input value={address.address_line2} onChange={(e) => update("address_line2", e.target.value)} autoComplete="address-line2" placeholder="Apartment, suite, etc." />
       </label>
       <label className="cart-field">
         <span>City</span>
-        <input value={address.city} onChange={(e) => update("city", e.target.value)} autoComplete="address-level2" />
+        <input value={address.city} onChange={(e) => update("city", e.target.value)} autoComplete="address-level2" placeholder="Maple Grove" />
       </label>
       <label className="cart-field">
         <span>State</span>
-        <input value={address.state} onChange={(e) => update("state", e.target.value)} autoComplete="address-level1" />
+        <input value={address.state} onChange={(e) => update("state", e.target.value)} autoComplete="address-level1" placeholder="MN" />
       </label>
       <label className="cart-field">
         <span>ZIP / postal code</span>
-        <input value={address.postal_code} onChange={(e) => update("postal_code", e.target.value)} autoComplete="postal-code" />
+        <input value={address.postal_code} onChange={(e) => update("postal_code", e.target.value)} autoComplete="postal-code" placeholder="55369" />
       </label>
       <label className="cart-field">
         <span>Country</span>
@@ -94,32 +97,72 @@ function formatShippingDestination(address) {
   return cityState || formatAddress(address);
 }
 
+function formatOrderDisplayId(orderId) {
+  if (!orderId) return "O00000000";
+  return orderId.startsWith("O") ? orderId : `O${orderId.replace(/^0+/, "")}`;
+}
+
+function getEstimatedDeliveryDate() {
+  const deliveryDate = new Date();
+  deliveryDate.setDate(deliveryDate.getDate() + 5);
+  return deliveryDate.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+function calculateCheckoutTotals(subtotal) {
+  const shipping = subtotal >= SHIPPING_FREE_THRESHOLD ? 0 : STANDARD_SHIPPING_FEE;
+  const tax = Number((subtotal * MINNESOTA_MERCHANDISE_TAX_RATE).toFixed(2));
+  return {
+    subtotal,
+    shipping,
+    tax,
+    total: Number((subtotal + shipping + tax).toFixed(2)),
+  };
+}
+
+function formatFee(value, freeLabel = "Free") {
+  return value === 0 ? freeLabel : `$${value.toFixed(2)}`;
+}
+
 export default function CartPage() {
   const { items, updateQuantity, removeFromCart, clearCart, total } = useCart();
   const { sessionId } = useAuth();
   const { chatSessionId } = useChatWidget();
   const checkoutSessionId = sessionId || chatSessionId;
+  const [searchParams, setSearchParams] = useSearchParams();
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [checkoutSession, setCheckoutSession] = useState(null);
+  const [isCheckoutDetailsOpen, setIsCheckoutDetailsOpen] = useState(() => searchParams.get("checkout") === "1");
   const [confirmation, setConfirmation] = useState(null);
   const [error, setError] = useState(null);
   const [contactEmail, setContactEmail] = useState("");
   const [shippingAddress, setShippingAddress] = useState(EMPTY_ADDRESS);
   const [billingSameAsShipping, setBillingSameAsShipping] = useState(true);
   const [billingAddress, setBillingAddress] = useState(EMPTY_ADDRESS);
-  const [searchParams, setSearchParams] = useSearchParams();
-  const shippingLabel = total >= 75 ? "Free" : "Free over $75";
+  const estimatedTotals = calculateCheckoutTotals(total);
+  const shippingLabel = formatFee(estimatedTotals.shipping);
   const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
 
   useEffect(() => {
     if (searchParams.get("checkout") === "1" && items.length > 0 && !checkoutSession && !confirmation) {
-      handleStartCheckout();
       const next = new URLSearchParams(searchParams);
       next.delete("checkout");
       setSearchParams(next, { replace: true });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  async function handleCheckoutClick() {
+    if (!isCheckoutDetailsOpen) {
+      setIsCheckoutDetailsOpen(true);
+      setError(null);
+      return;
+    }
+    await handleStartCheckout();
+  }
 
   async function handleStartCheckout() {
     setIsStartingCheckout(true);
@@ -173,6 +216,9 @@ export default function CartPage() {
       setCheckoutSession({
         clientSecret: data.payment.client_secret,
         total: data.total,
+        subtotal: data.subtotal,
+        shipping: data.shipping,
+        tax: data.tax,
         items: checkoutItems,
         sessionId: checkoutSessionId,
         checkoutDetails,
@@ -205,11 +251,15 @@ export default function CartPage() {
 
   if (confirmation) {
     const confirmationEmail = confirmation.order.contact_email || confirmation.order.stripe_receipt_email;
+    const confirmationSubtotal = confirmation.order.subtotal ?? confirmation.order.total;
+    const confirmationShipping = confirmation.order.shipping_total ?? 0;
+    const confirmationTax = confirmation.order.tax_total ?? 0;
+    const displayOrderId = formatOrderDisplayId(confirmation.order.order_id);
     return (
       <div className="cart-confirmation">
         <div className="cart-confirmation-check" aria-hidden="true">✓</div>
         <h2>Order confirmed</h2>
-        <p className="cart-confirmation-id">Order #{confirmation.order.order_id}</p>
+        <p className="cart-confirmation-id">Order #{displayOrderId}</p>
         <div className="cart-confirmation-details">
           <p>
             <strong>Total</strong>
@@ -225,6 +275,14 @@ export default function CartPage() {
               {confirmationEmail || "Email not available"}
             </span>
           </p>
+          <p>
+            <strong>Shipping method</strong>
+            <span>Standard shipping</span>
+          </p>
+          <p>
+            <strong>Estimated delivery</strong>
+            <span>{getEstimatedDeliveryDate()}</span>
+          </p>
         </div>
 
         <div className="cart-receipt">
@@ -239,13 +297,25 @@ export default function CartPage() {
             );
           })}
           <div className="cart-receipt-line cart-receipt-total">
+            <span>Subtotal</span>
+            <span>${confirmationSubtotal.toFixed(2)}</span>
+          </div>
+          <div className="cart-receipt-line">
+            <span>Shipping</span>
+            <span>{formatFee(confirmationShipping)}</span>
+          </div>
+          <div className="cart-receipt-line">
+            <span>Estimated tax</span>
+            <span>${confirmationTax.toFixed(2)}</span>
+          </div>
+          <div className="cart-receipt-line cart-receipt-total">
             <span>Total charged</span>
             <span>${confirmation.order.total.toFixed(2)}</span>
           </div>
         </div>
 
         <p className="cart-confirmation-note">
-          Payment status: {confirmation.paymentIntent.status} · Stripe receipt handled by Stripe test mode.
+          Payment confirmed · Stripe receipt handled by Stripe test mode.
         </p>
         <Link to="/" className="cart-empty-link">Continue shopping</Link>
       </div>
@@ -270,12 +340,18 @@ export default function CartPage() {
             <p><strong>Email</strong><span>{checkoutSession.checkoutDetails.contact_email}</span></p>
             <p><strong>Ship to</strong><span>{formatAddress(checkoutSession.checkoutDetails.shipping_address)}</span></p>
             <p><strong>Billing</strong><span>{checkoutSession.checkoutDetails.billing_same_as_shipping ? "Same as shipping" : formatAddress(checkoutSession.checkoutDetails.billing_address)}</span></p>
+            <div className="cart-review-divider" />
             {items.map((item) => (
               <p key={item.cart_key || item.product_id}>
                 <strong>{formatProductDisplayName(item.name)}</strong>
                 <span>{item.quantity} × ${item.price.toFixed(2)}</span>
               </p>
             ))}
+            <div className="cart-review-divider" />
+            <p><strong>Subtotal</strong><span>${checkoutSession.subtotal.toFixed(2)}</span></p>
+            <p><strong>Shipping</strong><span>{formatFee(checkoutSession.shipping)}</span></p>
+            <p><strong>Estimated tax</strong><span>${checkoutSession.tax.toFixed(2)}</span></p>
+            <p className="cart-review-total"><strong>Total charged today</strong><span>${checkoutSession.total.toFixed(2)}</span></p>
           </div>
           <div className="cart-demo-card-note">
             <span>Demo mode</span>
@@ -283,7 +359,7 @@ export default function CartPage() {
             <small>Use any future expiry and any CVC.</small>
           </div>
           <Elements stripe={stripePromise} options={{ clientSecret: checkoutSession.clientSecret }}>
-            <CheckoutForm onSuccess={handlePaymentSuccess} />
+            <CheckoutForm clientSecret={checkoutSession.clientSecret} onSuccess={handlePaymentSuccess} />
           </Elements>
         </div>
       </div>
@@ -313,30 +389,6 @@ export default function CartPage() {
 
       <div className="cart-layout">
         <div className="cart-items-panel">
-          <div className="cart-checkout-details">
-            <h3>Checkout details</h3>
-            <label className="cart-field cart-field--full">
-              <span>Email for confirmation and Stripe receipt</span>
-              <input
-                type="email"
-                value={contactEmail}
-                onChange={(e) => setContactEmail(e.target.value)}
-                autoComplete="email"
-              />
-            </label>
-            <AddressFields title="Shipping address" address={shippingAddress} onChange={setShippingAddress} />
-            <label className="cart-checkbox">
-              <input
-                type="checkbox"
-                checked={billingSameAsShipping}
-                onChange={(e) => setBillingSameAsShipping(e.target.checked)}
-              />
-              <span>Billing address is the same as shipping</span>
-            </label>
-            {!billingSameAsShipping && (
-              <AddressFields title="Billing address" address={billingAddress} onChange={setBillingAddress} />
-            )}
-          </div>
           <div className="cart-items">
             {items.map((item) => {
               const displayName = formatProductDisplayName(item.name);
@@ -351,7 +403,7 @@ export default function CartPage() {
                     <p className="cart-item-note">
                       {item.size || item.color
                         ? [item.color, item.size ? `Size ${item.size}` : ""].filter(Boolean).join(" · ")
-                        : "Size and color confirmed during checkout"}
+                        : "Choose size and color before payment"}
                     </p>
                   </div>
 
@@ -389,6 +441,50 @@ export default function CartPage() {
             })}
           </div>
 
+          {isCheckoutDetailsOpen && (
+            <div className="cart-checkout-details">
+              <div className="cart-checkout-details-header">
+                <div>
+                  <p className="cart-eyebrow">Checkout</p>
+                  <h3>Shipping and contact</h3>
+                </div>
+                <button
+                  type="button"
+                  className="cart-back-to-bag-btn"
+                  onClick={() => {
+                    setIsCheckoutDetailsOpen(false);
+                    setError(null);
+                  }}
+                >
+                  Back to bag
+                </button>
+              </div>
+              <p className="cart-checkout-helper">We’ll use this for delivery, order confirmation, and the Stripe receipt.</p>
+              <label className="cart-field cart-field--full">
+                <span>Email</span>
+                <input
+                  type="email"
+                  value={contactEmail}
+                  onChange={(e) => setContactEmail(e.target.value)}
+                  autoComplete="email"
+                  placeholder="you@example.com"
+                />
+              </label>
+              <AddressFields title="Shipping address" address={shippingAddress} onChange={setShippingAddress} />
+              <label className="cart-checkbox">
+                <input
+                  type="checkbox"
+                  checked={billingSameAsShipping}
+                  onChange={(e) => setBillingSameAsShipping(e.target.checked)}
+                />
+                <span>Billing address is the same as shipping</span>
+              </label>
+              {!billingSameAsShipping && (
+                <AddressFields title="Billing address" address={billingAddress} onChange={setBillingAddress} />
+              )}
+            </div>
+          )}
+
           <button className="cart-clear-btn" onClick={clearCart}>
             Clear cart
           </button>
@@ -406,21 +502,25 @@ export default function CartPage() {
           </div>
           <div className="cart-summary-row">
             <span>Estimated tax</span>
-            <span>Calculated at checkout</span>
+            <span>${estimatedTotals.tax.toFixed(2)}</span>
           </div>
           <div className="cart-total-row">
             <span>Estimated total</span>
-            <span className="cart-total-value">${total.toFixed(2)}</span>
+            <span className="cart-total-value">${estimatedTotals.total.toFixed(2)}</span>
           </div>
 
           {error && <p className="cart-error">{error}</p>}
 
           <button
             className="cart-checkout-btn"
-            onClick={handleStartCheckout}
+            onClick={handleCheckoutClick}
             disabled={isStartingCheckout}
           >
-            {isStartingCheckout ? "Starting…" : "Proceed to checkout"}
+            {isStartingCheckout
+              ? "Starting…"
+              : isCheckoutDetailsOpen
+                ? "Continue to payment"
+                : "Checkout"}
           </button>
 
           <div className="cart-summary-trust">

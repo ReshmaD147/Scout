@@ -263,6 +263,10 @@ def _deterministic_conversational_reply(structured_intent: StructuredIntent | No
         return None
     if structured_intent.request_type == "shopping_clarification" and structured_intent.clarification_question:
         return structured_intent.clarification_question
+    if structured_intent.request_type == "rating_comparison":
+        return structured_intent.text
+    if structured_intent.request_type == "recommendation_action_reply":
+        return structured_intent.text
     return DETERMINISTIC_CONVERSATIONAL_REPLIES.get(structured_intent.request_type)
 
 
@@ -560,7 +564,10 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
             if cart_result.get("color"):
                 variant_bits.append(cart_result["color"])
             variant_text = f" in {', '.join(variant_bits)}" if variant_bits else ""
-            confirm_reply = f"Done — I added the {cart_result['name']}{variant_text} to your cart."
+            confirm_reply = (
+                f"Done — I added the {cart_result['name']}{variant_text} to your cart. "
+                "You can review your cart when you’re ready to check out."
+            )
         else:
             confirm_reply = cart_result.get("error", "I couldn't add that to your cart — want to try again?")
 
@@ -853,7 +860,10 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
                     if cart_result.get("color"):
                         variant_bits.append(cart_result["color"])
                     variant_text = f" in {', '.join(variant_bits)}" if variant_bits else ""
-                    reply = f"Done — I added the {cart_result['name']}{variant_text} to your cart."
+                    reply = (
+                        f"Done — I added the {cart_result['name']}{variant_text} to your cart. "
+                        "You can review your cart when you’re ready to check out."
+                    )
                     if conversation_context is not None:
                         conversation_context["completed_cart_add"] = cart_result
                 else:

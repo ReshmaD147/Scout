@@ -48,7 +48,7 @@ async def _run_tool_first_if_possible(
     structured_intent: StructuredIntent | None,
     sub_intent: str,
     agent_name: str,
-) -> bool:
+) -> bool | str:
     if structured_intent is None:
         return False
     if (
@@ -96,6 +96,36 @@ async def _run_tool_first_if_possible(
         # unmatched internal search silently produced a generic
         # "couldn't verify" message instead of real external offers.
         return False
+    if tool_name == "recommend_products":
+        products = [
+            facts
+            for entry in get_evidence_entries()
+            if entry.tool_name == "recommend_products"
+            for facts in _iter_completion_facts(entry.normalized_facts)
+            if facts.get("product_id") and facts.get("name")
+        ]
+        if not products:
+            products = [
+                facts
+                for facts in _iter_completion_facts({"items": result} if isinstance(result, list) else result)
+                if facts.get("product_id") and facts.get("name")
+            ]
+        if not _internal_products_satisfy_explicit_request(products, structured_intent):
+            category = structured_intent.product_type or _category_from_text(structured_intent.text)
+            if category and not _scout_only_requested(structured_intent.text):
+                args = _external_offer_args(
+                    structured_intent.text,
+                    category=category,
+                    budget_max=structured_intent.budget_max,
+                    color=structured_intent.color,
+                )
+                await _execute_read_only_tool("search_external_offers", args, agent_name="external_offer_agent")
+                _record_tool_first(
+                    "search_external_offers",
+                    "external_offer_agent",
+                    continued_from="recommend_products",
+                )
+                return "external_handoff"
     _record_tool_first(tool_name, agent_name)
     return True
 

@@ -96,7 +96,7 @@ def test_color_specific_unavailable_inventory_renders_from_approved_claims():
 
     assert reply == (
         "The Black Midi Dress is out of stock in black, medium. "
-        "I can check nearby stores, check online or delivery availability, or find similar products."
+        "Want me to check a nearby store or find a similar option in that size?"
     )
     assert products == []
     assert "P001" not in reply
@@ -138,7 +138,7 @@ def test_variant_unavailable_overrides_general_store_inventory_wording():
 
     assert reply == (
         "Maple Grove has other inventory for that item, but the black, medium option is currently out of stock. "
-        "I can check nearby stores, check online or delivery availability, or find similar products."
+        "Want me to check a nearby store or find a similar option in that size?"
     )
     assert products == []
     assert "P001" not in reply
@@ -161,7 +161,7 @@ def test_nearby_store_variant_unavailable_renders_not_found_nearby():
 
     assert reply == (
         "Black Midi Dress in black, medium is not available in nearby store inventory. "
-        "I can check nearby stores, check online or delivery availability, or find similar products."
+        "Want me to check a nearby store or find a similar option in that size?"
     )
     assert products == []
     assert "P001" not in reply
@@ -326,6 +326,34 @@ def test_multi_product_recommendation_uses_natural_summary_without_repetition():
     assert [product["product_id"] for product in rendered] == ["P003", "P004", "P001"]
 
 
+def test_compare_internal_products_uses_conversational_opening():
+    products = [
+        {"product_id": "P001", "name": "Black Midi Dress", "price": 79.99, "source": "internal"},
+        {"product_id": "P004", "name": "Slip Dress", "price": 62.5, "source": "internal"},
+    ]
+    claims = [
+        claim(ClaimType.PRODUCT_IDENTITY, claim_id="cl_black_name", subject_id="P001", field="name", value="Black Midi Dress"),
+        claim(ClaimType.PRODUCT_PRICE, claim_id="cl_black_price", subject_id="P001", field="price", value=79.99),
+        claim(ClaimType.PRODUCT_IDENTITY, claim_id="cl_slip_name", subject_id="P004", field="name", value="Slip Dress"),
+        claim(ClaimType.PRODUCT_PRICE, claim_id="cl_slip_price", subject_id="P004", field="price", value=62.5),
+    ]
+
+    reply, rendered = render_verified_response(
+        original_reply="Compare these two.",
+        products=products,
+        proposed_claims=claims,
+        verification_result=result([approved.claim_id for approved in claims]),
+        customer_message="Compare Black Midi Dress and Slip Dress",
+    )
+
+    assert reply == (
+        "Of course — here’s a quick comparison of 2 dresses: "
+        "Black Midi Dress for $79.99 and Slip Dress for $62.50."
+    )
+    assert "I found 2" not in reply
+    assert [product["product_id"] for product in rendered] == ["P001", "P004"]
+
+
 def test_verified_internal_product_uses_local_seeded_image_when_available():
     claims = [
         claim(ClaimType.PRODUCT_IDENTITY, claim_id="cl_name", subject_id="P003", field="name", value="Wrap Dress"),
@@ -432,7 +460,7 @@ def test_size_availability_renders_request_specific_available_and_unavailable():
 
     assert reply == (
         "The Black Midi Dress is out of stock in medium. "
-        "I can check nearby stores, check online or delivery availability, or find similar products."
+        "Want me to check a nearby store or find a similar option in that size?"
     )
 
 
