@@ -93,7 +93,8 @@ Expected demo point:
 
 ## Beat 5b — Authenticated Order and Shipment Tracking
 
-Sign in as demo customer C001 first (via the sign-in flow), then ask:
+Click the account icon in the header, then "Sign in as demo customer"
+(works directly in the storefront UI now - no API calls needed). Then ask:
 "Where is order O1001?"
 
 Expected demo point:
