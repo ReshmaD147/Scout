@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from scout.repositories.order_repository import OrderRepository
 from scout.repositories.shipment_repository import ShipmentRepository
 from scout.repositories.product_repository import ProductRepository
+from scout.services.product_service import _get_active_promotion_dict
 
 AUTH_REQUIRED_ERROR = "authentication_required"
 UNAUTHORIZED_ORDER_ERROR = "order_access_denied"
@@ -152,11 +153,20 @@ def create_order(
         product = product_repo.get_by_id(item["product_id"])
         if not product:
             continue
+        # Real bug fix: this previously used product.price (the regular,
+        # undiscounted catalog price) unconditionally, ignoring any
+        # active promotion - meaning a customer shown a discounted price
+        # in their cart could be charged the FULL, undiscounted price at
+        # checkout. Now correctly uses the same promotion-aware pricing
+        # logic as /cart/add, so what the customer is charged always
+        # matches what they were quoted.
+        promotion = _get_active_promotion_dict(session, product)
+        price_at_purchase = promotion["discounted_price"] if promotion else product.price
         order_repo.add_item(
             order_id=order_id,
             product_id=item["product_id"],
             quantity=item.get("quantity", 1),
-            price_at_purchase=product.price,
+            price_at_purchase=price_at_purchase,
             attribution_source=item.get("attribution_source"),
             recommendation_id=item.get("recommendation_id"),
         )
