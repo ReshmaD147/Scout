@@ -7,7 +7,7 @@ from scout.db.session import SessionLocal
 from scout.repositories.product_repository import ProductRepository
 from scout.services.order_service import create_order
 from scout.services.payment_service import create_test_payment, PaymentProcessingError
-from scout.services.product_service import check_stock
+from scout.services.product_service import check_stock, _get_active_promotion_dict
 
 router = APIRouter()
 
@@ -72,24 +72,44 @@ def checkout(request: CheckoutRequest):
                 item.recommendation_id
                 and validate_recommendation(item.recommendation_id, item.product_id)
             )
+            promotion_for_item = _get_active_promotion_dict(session, product)
+            price_for_item = promotion_for_item["discounted_price"] if promotion_for_item else product.price
             cart_items.append({
                 "product_id": item.product_id,
                 "quantity": item.quantity,
                 "attribution_source": "scout" if is_genuinely_attributed else None,
                 "recommendation_id": item.recommendation_id if is_genuinely_attributed else None,
+                "_computed_price": price_for_item,
             })
+
+        # Real bug fix: previously, create_order() committed the order to
+        # the database BEFORE payment was even attempted. If Stripe
+        # failed for any reason, a "pending" order was permanently left
+        # behind with no successful payment ever having occurred - a
+        # genuine orphaned-order problem. Now, the total is computed
+        # independently (using the same validated stock/pricing data
+        # already gathered above) and payment is attempted FIRST. The
+        # order is only created after payment succeeds, so a payment
+        # failure never leaves a phantom order in the database.
+        precomputed_total = sum(
+            ci["_computed_price"] * ci["quantity"] for ci in cart_items
+        )
+
+        try:
+            payment = create_test_payment(
+                amount_usd=precomputed_total,
+                description="Scout order",
+            )
+        except PaymentProcessingError as e:
+            return {"success": False, "error": str(e)}
+
+        for ci in cart_items:
+            ci.pop("_computed_price", None)
+
         order = create_order(session, customer_id=request.customer_id, cart_items=cart_items)
 
         if not order or not order.get("items"):
             return {"success": False, "error": "Could not create order — check product IDs."}
-
-        try:
-            payment = create_test_payment(
-                amount_usd=order["total"],
-                description=f"Order {order['order_id']}",
-            )
-        except PaymentProcessingError as e:
-            return {"success": False, "error": str(e)}
 
         return {"success": True, "order": order, "payment": payment}
     finally:
