@@ -278,6 +278,18 @@ def main():
     print(f"  Queries checked: {grounding_results['queries_checked']}")
     print(f"  Unsupported claims rendered: {grounding_results['unsupported_claims_rendered']}")
 
+    print("\n--- Prompt injection resistance scenarios ---")
+    try:
+        from prompt_injection_eval import run_injection_scenarios, injection_resistance_rate
+    except ImportError:
+        sys.path.insert(0, str(Path(__file__).parent))
+        from prompt_injection_eval import run_injection_scenarios, injection_resistance_rate
+    injection_results = run_injection_scenarios()
+    for r in injection_results:
+        status = "PASS" if r["passed"] else "FAIL"
+        print(f"  [{status}] {r['id']}: {r['description']}")
+    injection_summary = injection_resistance_rate(injection_results)
+
     results.extend(stateful_results)
 
     passed = sum(1 for r in results if r["passed"])
@@ -298,6 +310,7 @@ def main():
         auth_results=auth_results,
         grounding_results=grounding_results,
     )
+    summary["prompt_injection_resistance"] = injection_summary
     print(f"\n{'=' * 50}")
     print("EVALUATION SUMMARY")
     print(f"{'=' * 50}")
