@@ -35,7 +35,14 @@ def _context_product(product: dict) -> dict | None:
     if not isinstance(product_id, str) or not product_id.strip():
         return None
     output = {"product_id": product_id}
-    for key in ("name", "source", "category", "image_url", "recommendation_id"):
+    for key in (
+        "name",
+        "source",
+        "category",
+        "image_url",
+        "recommendation_id",
+        "recommendation_session_id",
+    ):
         if isinstance(product.get(key), str) and product[key].strip():
             output[key] = product[key]
     for key in ("price", "rating"):

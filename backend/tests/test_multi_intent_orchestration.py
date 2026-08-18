@@ -581,6 +581,54 @@ def test_streaming_non_streaming_and_api_schemas_remain_compatible(monkeypatch):
     assert set(ChatResponse.model_fields) == {"session_id", "reply", "products"}
 
 
+def test_streaming_multi_intent_applies_attribution_before_result(monkeypatch):
+    message = "Recommend a dress under $80 and check which one is available at Maple Grove."
+    context = {}
+    product = {"product_id": "P003", "name": "Wrap Dress", "source": "internal"}
+    calls = []
+
+    async def fake_plan(*args, **kwargs):
+        return "Wrap Dress is a good option.", [product]
+
+    def fake_attribution(reply, products, *, conversation_context, session_id):
+        calls.append((reply, products, conversation_context, session_id))
+        products[0]["recommendation_id"] = "rec_stream_multi"
+        conversation_context["pending_cart_offer"] = {
+            "product_id": "P003",
+            "product_name": "Wrap Dress",
+            "quantity": 1,
+            "recommendation_id": "rec_stream_multi",
+        }
+        return f"{reply} Want me to add the Wrap Dress to your cart?"
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_run_multi_intent_plan", fake_plan)
+    monkeypatch.setattr(supervisor, "_apply_streaming_attribution_and_cart_offer", fake_attribution)
+
+    events = asyncio.run(
+        _collect(
+            supervisor.ask_streaming(
+                App(),
+                [],
+                message,
+                conversation_context=context,
+                session_id="sess_stream_multi",
+            )
+        )
+    )
+
+    assert events[-1] == (
+        "result",
+        (
+            "Wrap Dress is a good option. Want me to add the Wrap Dress to your cart?",
+            [product],
+        ),
+    )
+    assert product["recommendation_id"] == "rec_stream_multi"
+    assert context["pending_cart_offer"]["recommendation_id"] == "rec_stream_multi"
+    assert calls == [("Wrap Dress is a good option.", [product], context, "sess_stream_multi")]
+
+
 def test_provider_timeout_still_returns_safe_response(monkeypatch):
     monkeypatch.setattr(supervisor.settings, "CHAT_REQUEST_TIMEOUT_SECONDS", 0.01)
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())

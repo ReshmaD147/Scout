@@ -3,6 +3,8 @@ import { Link, useSearchParams } from "react-router-dom";
 import { loadStripe } from "@stripe/stripe-js";
 import { Elements } from "@stripe/react-stripe-js";
 import { useCart } from "../context/CartContext";
+import { useAuth } from "../context/AuthContext";
+import { useChatWidget } from "../context/ChatWidgetContext";
 import CheckoutForm from "../components/CheckoutForm";
 import "./CartPage.css";
 
@@ -16,6 +18,9 @@ const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY);
 
 export default function CartPage() {
   const { items, updateQuantity, removeFromCart, clearCart, total } = useCart();
+  const { sessionId } = useAuth();
+  const { chatSessionId } = useChatWidget();
+  const checkoutSessionId = sessionId || chatSessionId;
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [checkoutSession, setCheckoutSession] = useState(null);
   const [confirmation, setConfirmation] = useState(null);
@@ -38,21 +43,20 @@ export default function CartPage() {
     setIsStartingCheckout(true);
     setError(null);
     try {
+      const checkoutItems = items.map((i) => ({
+        product_id: i.product_id,
+        quantity: i.quantity,
+        size: i.size,
+        color: i.color,
+        attribution_source: i.attribution_source,
+        recommendation_id: i.recommendation_id,
+      }));
       const response = await fetch(`${API_BASE}/checkout`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          items: items.map((i) => ({
-            product_id: i.product_id,
-            quantity: i.quantity,
-            size: i.size,
-            color: i.color,
-            // Real bug fix: attribution was correctly preserved through
-            // cart-add and CartContext, but dropped here at the final
-            // checkout step, breaking Scout-attributed revenue tracking.
-            attribution_source: i.attribution_source,
-            recommendation_id: i.recommendation_id,
-          })),
+          items: checkoutItems,
+          session_id: checkoutSessionId,
         }),
       });
       const data = await response.json();
@@ -64,7 +68,9 @@ export default function CartPage() {
 
       setCheckoutSession({
         clientSecret: data.payment.client_secret,
-        order: data.order,
+        total: data.total,
+        items: checkoutItems,
+        sessionId: checkoutSessionId,
       });
     } catch {
       setError("We couldn’t start checkout right now. Please try again.");
@@ -73,11 +79,21 @@ export default function CartPage() {
     }
   }
 
-  function handlePaymentSuccess(paymentIntent) {
-    setConfirmation({
-      order: checkoutSession.order,
-      paymentIntent,
+  async function handlePaymentSuccess(paymentIntent) {
+    const response = await fetch(`${API_BASE}/checkout/finalize`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        payment_intent_id: paymentIntent.id,
+        items: checkoutSession.items,
+        session_id: checkoutSession.sessionId,
+      }),
     });
+    const data = await response.json();
+    if (!response.ok || !data.success) {
+      throw new Error(data.error || "Payment succeeded, but the order could not be finalized.");
+    }
+    setConfirmation({ order: data.order, paymentIntent });
     clearCart();
   }
 
@@ -123,7 +139,7 @@ export default function CartPage() {
           </p>
           <div className="cart-payment-summary">
             <span>Order total</span>
-            <strong>${checkoutSession.order.total.toFixed(2)}</strong>
+            <strong>${checkoutSession.total.toFixed(2)}</strong>
           </div>
           <div className="cart-demo-card-note">
             <span>Demo mode</span>

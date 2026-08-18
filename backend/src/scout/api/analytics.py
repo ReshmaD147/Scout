@@ -1,10 +1,10 @@
 from fastapi import APIRouter
-from sqlalchemy import func
 
 from scout.db.session import SessionLocal
-from scout.db.models import OrderItem
+from scout.db.models import Order, OrderItem
 
 router = APIRouter()
+REVENUE_ELIGIBLE_ORDER_STATUSES = ("processing", "shipped", "delivered", "completed")
 
 
 @router.get("/analytics/scout-attributed-revenue")
@@ -22,7 +22,11 @@ def scout_attributed_revenue():
     try:
         scout_items = (
             session.query(OrderItem)
-            .filter(OrderItem.attribution_source == "scout")
+            .join(Order, Order.order_id == OrderItem.order_id)
+            .filter(
+                OrderItem.attribution_source == "scout",
+                Order.status.in_(REVENUE_ELIGIBLE_ORDER_STATUSES),
+            )
             .all()
         )
 

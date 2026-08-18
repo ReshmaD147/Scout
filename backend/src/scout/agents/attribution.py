@@ -29,7 +29,11 @@ def register_recommendation(product_id: str, session_id: str) -> str:
     return recommendation_id
 
 
-def validate_recommendation(recommendation_id: str, product_id: str) -> bool:
+def validate_recommendation(
+    recommendation_id: str,
+    product_id: str,
+    session_id: str | None = None,
+) -> bool:
     """Confirm a recommendation_id is real and genuinely matches the
     product being added to cart. Returns False for any mismatch, an
     unknown ID, or a missing ID - fail closed, same principle as the
@@ -40,4 +44,52 @@ def validate_recommendation(recommendation_id: str, product_id: str) -> bool:
     entry = _RECOMMENDATION_REGISTRY.get(recommendation_id)
     if not entry:
         return False
-    return entry["product_id"] == product_id
+    if entry["product_id"] != product_id:
+        return False
+    if session_id is not None and entry["session_id"] != session_id:
+        return False
+    return True
+
+
+def apply_attribution_and_cart_offer(
+    *, products: list[dict], reply: str, session_id: str, conversation_context: dict
+) -> str:
+    """Shared logic for tagging recommended products with a real
+    recommendation_id and, for a genuinely unambiguous single product,
+    proactively offering to add it to cart. Extracted so both the
+    non-streaming /chat endpoint and the streaming ask_streaming() path
+    apply the EXACT same attribution/cart-offer behavior - previously,
+    this logic only existed in api/chat.py, meaning recommendations
+    delivered via streaming (which is what the actual chat widget UI
+    uses exclusively) never received a recommendation_id at all, and the
+    automatic single-product cart offer never fired for streamed
+    responses. Confirmed via code review as a real, significant gap.
+
+    Mutates `products` in place (adding recommendation_id) and
+    `conversation_context` in place (setting pending_cart_offer), and
+    returns the possibly-appended reply text.
+    """
+    for product in products:
+        internal_product_id = product.get("product_id")
+        if internal_product_id:
+            product["recommendation_id"] = register_recommendation(
+                product_id=internal_product_id,
+                session_id=session_id,
+            )
+            product["recommendation_session_id"] = session_id
+
+    internal_products = [p for p in products if p.get("source") == "internal"]
+    if len(internal_products) == 1 and not conversation_context.get("pending_cart_offer"):
+        offer_product = internal_products[0]
+        conversation_context["pending_cart_offer"] = {
+            "product_id": offer_product.get("product_id"),
+            "product_name": offer_product.get("name"),
+            "size": offer_product.get("size"),
+            "color": offer_product.get("color"),
+            "quantity": 1,
+            "recommendation_id": offer_product.get("recommendation_id"),
+            "recommendation_session_id": offer_product.get("recommendation_session_id"),
+        }
+        reply = f"{reply} Want me to add the {offer_product.get('name')} to your cart?"
+
+    return reply

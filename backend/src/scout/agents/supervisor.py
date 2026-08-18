@@ -478,10 +478,15 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
         # mechanism already built and tested.
         selected_product_id = split_result.structured_intent.product_id
         selected_recommendation_id = split_result.structured_intent.recommendation_id
+        selected_recommendation_session_id = split_result.structured_intent.recommendation_session_id
         product_name = None
         for item in (conversation_context or {}).get("active_selected_products") or []:
             if item.get("product_id") == selected_product_id:
                 product_name = item.get("name")
+                selected_recommendation_session_id = (
+                    selected_recommendation_session_id
+                    or item.get("recommendation_session_id")
+                )
                 break
 
         if product_name:
@@ -492,6 +497,7 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
                 "color": None,
                 "quantity": 1,
                 "recommendation_id": selected_recommendation_id,
+                "recommendation_session_id": selected_recommendation_session_id,
             }
             # Also update active_product_id/name to this specific
             # selection - without this, a follow-up question right
@@ -528,6 +534,7 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
                 size=split_result.structured_intent.size,
                 color=split_result.structured_intent.color,
                 recommendation_id=split_result.structured_intent.recommendation_id,
+                recommendation_session_id=None,
             )
         finally:
             session.close()
@@ -698,7 +705,27 @@ async def _run_single_intent_streaming(
         yield ("result", (SAFE_TIMEOUT_REPLY, []))
 
 
-async def ask_streaming(app, history: list[dict], message: str, debug: bool = False, conversation_context: dict | None = None):
+def _apply_streaming_attribution_and_cart_offer(
+    reply: str,
+    products: list[dict],
+    *,
+    conversation_context: dict | None,
+    session_id: str | None,
+) -> str:
+    if conversation_context is None or not session_id:
+        return reply
+
+    from scout.agents.attribution import apply_attribution_and_cart_offer
+
+    return apply_attribution_and_cart_offer(
+        products=products,
+        reply=reply,
+        session_id=session_id,
+        conversation_context=conversation_context,
+    )
+
+
+async def ask_streaming(app, history: list[dict], message: str, debug: bool = False, conversation_context: dict | None = None, session_id: str | None = None):
     """Streaming-aware sibling of ask(). Yields ("progress", label) tuples
     as real steps occur across all sub-intents, then a final
     ("result", (final_reply, all_products)) tuple once everything has been
@@ -737,7 +764,91 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
                         debug,
                         conversation_context,
                     )
+                reply = _apply_streaming_attribution_and_cart_offer(
+                    reply,
+                    products,
+                    conversation_context=conversation_context,
+                    session_id=session_id,
+                )
                 yield ("result", (reply, products))
+                return
+
+            if (
+                split_result.structured_intent is not None
+                and split_result.structured_intent.request_type == "recommendation_selection"
+            ):
+                selected_product_id = split_result.structured_intent.product_id
+                selected_recommendation_id = split_result.structured_intent.recommendation_id
+                selected_recommendation_session_id = split_result.structured_intent.recommendation_session_id
+                product_name = None
+                for item in (conversation_context or {}).get("active_selected_products") or []:
+                    if item.get("product_id") == selected_product_id:
+                        product_name = item.get("name")
+                        selected_recommendation_session_id = (
+                            selected_recommendation_session_id
+                            or item.get("recommendation_session_id")
+                        )
+                        break
+
+                if product_name:
+                    conversation_context["pending_cart_offer"] = {
+                        "product_id": selected_product_id,
+                        "product_name": product_name,
+                        "size": None,
+                        "color": None,
+                        "quantity": 1,
+                        "recommendation_id": selected_recommendation_id,
+                        "recommendation_session_id": selected_recommendation_session_id,
+                    }
+                    conversation_context["active_product_id"] = selected_product_id
+                    conversation_context["active_product_name"] = product_name
+                    reply = f"Want me to add the {product_name} to your cart?"
+                else:
+                    reply = "Sorry, I couldn't identify that item. Could you name it directly?"
+
+                history.append({"role": "user", "content": sub_intents[0]})
+                history.append({"role": "assistant", "content": reply})
+                yield ("result", (reply, []))
+                return
+
+            if (
+                split_result.structured_intent is not None
+                and split_result.structured_intent.request_type == "cart_add_confirmed"
+            ):
+                session = SessionLocal()
+                try:
+                    cart_result = add_to_cart_service(
+                        session,
+                        product_id=split_result.structured_intent.product_id,
+                        quantity=1,
+                        size=split_result.structured_intent.size,
+                        color=split_result.structured_intent.color,
+                        recommendation_id=split_result.structured_intent.recommendation_id,
+                        recommendation_session_id=session_id,
+                    )
+                finally:
+                    session.close()
+
+                if cart_result.get("success"):
+                    from scout.agents.rendering import _natural_size
+                    variant_bits = []
+                    natural_size = _natural_size(cart_result.get("size"))
+                    if natural_size:
+                        variant_bits.append(natural_size)
+                    if cart_result.get("color"):
+                        variant_bits.append(cart_result["color"])
+                    variant_text = f" in {', '.join(variant_bits)}" if variant_bits else ""
+                    reply = f"Done — I added the {cart_result['name']}{variant_text} to your cart."
+                    if conversation_context is not None:
+                        conversation_context["completed_cart_add"] = cart_result
+                else:
+                    reply = cart_result.get(
+                        "error", "I couldn't add that to your cart — want to try again?"
+                    )
+
+                history.append({"role": "user", "content": sub_intents[0]})
+                history.append({"role": "assistant", "content": reply})
+                yield ("result", (reply, []))
                 return
 
             direct_reply = _deterministic_conversational_reply(split_result.structured_intent, sub_intents)
@@ -776,6 +887,12 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
                         sub_answers.append(reply_text)
 
             final_reply = merge_answers(splitter_model, message, sub_answers)
+            final_reply = _apply_streaming_attribution_and_cart_offer(
+                final_reply,
+                all_products,
+                conversation_context=conversation_context,
+                session_id=session_id,
+            )
             yield ("result", (final_reply, all_products))
     except TimeoutError:
         mark_timeout()

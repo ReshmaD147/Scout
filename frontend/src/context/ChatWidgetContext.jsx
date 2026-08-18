@@ -6,6 +6,7 @@ export function ChatWidgetProvider({ children }) {
   const [isOpen, setIsOpen] = useState(false);
   const [prefillMessage, setPrefillMessage] = useState("");
   const [prefillNonce, setPrefillNonce] = useState(0);
+  const [chatSessionId, setChatSessionId] = useState(null);
 
   function openChatWithMessage(message) {
     setPrefillMessage(message);
@@ -18,6 +19,8 @@ export function ChatWidgetProvider({ children }) {
     setIsOpen,
     prefillMessage,
     prefillNonce,
+    chatSessionId,
+    setChatSessionId,
     openChatWithMessage,
   };
 

@@ -360,6 +360,7 @@ def add_to_cart_service(
     size: str | None = None,
     color: str | None = None,
     recommendation_id: str | None = None,
+    recommendation_session_id: str | None = None,
 ) -> dict:
     """Shared, deterministic cart-add validation - the single source of
     truth called by both api/cart.py's HTTP endpoint AND Phase 2's
@@ -401,7 +402,11 @@ def add_to_cart_service(
 
     promotion = _get_active_promotion_dict(session, product)
     unit_price = promotion["discounted_price"] if promotion else product.price
-    is_scout_attributed = validate_recommendation(recommendation_id, product.product_id)
+    is_scout_attributed = validate_recommendation(
+        recommendation_id,
+        product.product_id,
+        recommendation_session_id,
+    )
 
     return {
         "success": True,
@@ -419,4 +424,5 @@ def add_to_cart_service(
         "available_quantity": stock_info["total_quantity"],
         "attribution_source": "scout" if is_scout_attributed else None,
         "recommendation_id": recommendation_id if is_scout_attributed else None,
+        "recommendation_session_id": recommendation_session_id if is_scout_attributed else None,
     }

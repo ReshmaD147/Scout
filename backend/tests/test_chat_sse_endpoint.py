@@ -44,7 +44,7 @@ def test_chat_stream_endpoint_emits_session_progress_and_done(monkeypatch):
     chat_api.SESSION_HISTORIES.clear()
     chat_api.SESSION_CONTEXTS.clear()
 
-    async def fake_ask_streaming(app, history, message, conversation_context=None, debug=False):
+    async def fake_ask_streaming(app, history, message, conversation_context=None, debug=False, session_id=None):
         assert app is not None
         assert history == []
         assert message == "Recommend a dress under $80."
@@ -101,3 +101,40 @@ def test_chat_stream_endpoint_masks_raw_stream_exceptions(monkeypatch):
     assert "SECRET" not in response.text
     assert "api_key" not in response.text
     assert "traceback" not in response.text
+
+
+def test_chat_stream_endpoint_emits_validated_cart_item(monkeypatch):
+    chat_api.SESSION_HISTORIES.clear()
+    chat_api.SESSION_CONTEXTS.clear()
+
+    cart_item = {
+        "success": True,
+        "product_id": "P001",
+        "name": "Black Midi Dress",
+        "brand": "Scout",
+        "unit_price": 67.99,
+        "quantity": 1,
+        "size": "M",
+        "color": "black",
+        "attribution_source": "scout",
+        "recommendation_id": "rec_test",
+    }
+
+    async def fake_ask_streaming(
+        app, history, message, conversation_context=None, debug=False, session_id=None
+    ):
+        conversation_context["completed_cart_add"] = cart_item
+        yield ("result", ("Done — I added it to your cart.", []))
+
+    monkeypatch.setattr(chat_api, "ask_streaming", fake_ask_streaming)
+
+    with TestClient(_test_app()) as client:
+        response = client.post(
+            "/chat/stream",
+            json={"message": "yes", "session_id": "sess_cart"},
+        )
+
+    events = _parse_sse_events(response.text)
+    done_payload = json.loads(events[-1]["data"])
+    assert done_payload["cart_item"] == cart_item
+    assert "completed_cart_add" not in chat_api.SESSION_CONTEXTS["sess_cart"]

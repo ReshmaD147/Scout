@@ -73,7 +73,14 @@ class App:
 def test_verified_selected_product_becomes_active_context(monkeypatch):
     app = App()
     context = {}
-    product = {"product_id": "P001", "name": "Black Midi Dress", "price": 79.99, "source": "internal"}
+    product = {
+        "product_id": "P001",
+        "name": "Black Midi Dress",
+        "price": 79.99,
+        "source": "internal",
+        "recommendation_id": "rec_context",
+        "recommendation_session_id": "sess_context",
+    }
 
     async def fake_tool(tool_name, args, *, agent_name):
         return [product]
@@ -84,7 +91,14 @@ def test_verified_selected_product_becomes_active_context(monkeypatch):
 
     asyncio.run(supervisor.ask(app, [], "Recommend a dress under $80.", conversation_context=context))
 
-    assert context["active_selected_products"] == [{"product_id": "P001", "name": "Black Midi Dress", "source": "internal", "price": 79.99}]
+    assert context["active_selected_products"] == [{
+        "product_id": "P001",
+        "name": "Black Midi Dress",
+        "source": "internal",
+        "recommendation_id": "rec_context",
+        "recommendation_session_id": "sess_context",
+        "price": 79.99,
+    }]
     assert context["active_product_id"] == "P001"
     assert context["active_product_name"] == "Black Midi Dress"
     assert context["requested_budget_max"] == 80

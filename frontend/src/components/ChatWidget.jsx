@@ -303,18 +303,25 @@ function refinementPrompts(products) {
 }
 
 export default function ChatWidget() {
-  const { isOpen, setIsOpen, prefillMessage, prefillNonce } = useChatWidget();
+  const {
+    isOpen,
+    setIsOpen,
+    prefillMessage,
+    prefillNonce,
+    chatSessionId,
+    setChatSessionId,
+  } = useChatWidget();
   const { sessionId: authSessionId } = useAuth();
+  const { addValidatedCartItem } = useCart();
   const location = useLocation();
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
-  const [localSessionId, setLocalSessionId] = useState(null);
   // Use the authenticated session_id once the customer signs in (so
   // order/shipment questions are correctly recognized as coming from a
   // signed-in customer); otherwise fall back to whatever local session
   // the chat itself has already established.
-  const sessionId = authSessionId || localSessionId;
-  const setSessionId = setLocalSessionId;
+  const sessionId = authSessionId || chatSessionId;
+  const setSessionId = setChatSessionId;
   const [isLoading, setIsLoading] = useState(false);
   const [progressSteps, setProgressSteps] = useState([]);
   const [progressCollapsed, setProgressCollapsed] = useState(false);
@@ -369,8 +376,11 @@ export default function ChatWidget() {
           gotAnyEvent = true;
           setProgressSteps((prev) => [...prev, label]);
         },
-        onDone: (reply, products) => {
+        onDone: (reply, products, cartItem) => {
           gotAnyEvent = true;
+          if (cartItem) {
+            addValidatedCartItem(cartItem);
+          }
           setMessages((prev) => [
             ...prev,
             {

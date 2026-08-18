@@ -24,6 +24,7 @@ class StructuredIntent:
     order_id: str | None = None
     product_id: str | None = None
     recommendation_id: str | None = None
+    recommendation_session_id: str | None = None
     fulfillment_preference: str | None = None
     needs_clarification: bool = False
     clarification_question: str | None = None

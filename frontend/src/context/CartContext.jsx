@@ -34,7 +34,19 @@ function cartReducer(state, action) {
         return {
           items: state.items.map((i) =>
             i.cart_key === action.item.cart_key
-              ? { ...i, quantity: i.quantity + action.item.quantity }
+              ? {
+                  ...i,
+                  ...(
+                    action.item.attribution_source === "scout"
+                      ? {
+                          attribution_source: action.item.attribution_source,
+                          recommendation_id: action.item.recommendation_id,
+                          recommendation_session_id: action.item.recommendation_session_id,
+                        }
+                      : {}
+                  ),
+                  quantity: i.quantity + action.item.quantity,
+                }
               : i
           ),
         };
@@ -85,6 +97,33 @@ export function CartProvider({ children }) {
     }
   }, [state]);
 
+  const addValidatedCartItem = (result, product = {}) => {
+    if (!result?.success) return;
+    const item = {
+      cart_key: [
+        result.product_id,
+        result.color || "",
+        result.size || "",
+      ].join(":"),
+      product_id: result.product_id,
+      name: result.name,
+      brand: result.brand || product.brand,
+      image_url: result.image_url,
+      price: result.unit_price,
+      promotion: result.promotion,
+      quantity: result.quantity,
+      size: result.size,
+      color: result.color,
+      attribution_source: result.attribution_source,
+      recommendation_id: result.recommendation_id,
+      recommendation_session_id: result.recommendation_session_id,
+    };
+
+    dispatch({ type: "ADD_ITEM", item });
+    setLastAdded(item);
+    setNotifyId((current) => current + 1);
+  };
+
   const addToCart = async (product, quantity = 1, options = {}) => {
     const productId = product.product_id;
     const pendingKey = [
@@ -103,38 +142,19 @@ export function CartProvider({ children }) {
 
     pendingProductIds.current.add(pendingKey);
     try {
-      const result = await addToCartRequest(productId, quantity, options);
+      const requestOptions = {
+        ...options,
+        recommendation_id: options.recommendation_id || product.recommendation_id,
+        recommendation_session_id:
+          options.recommendation_session_id || product.recommendation_session_id,
+      };
+      const result = await addToCartRequest(productId, quantity, requestOptions);
 
       if (!result.success) {
         throw new Error(result.error || "Failed to add item");
       }
 
-      const item = {
-        cart_key: [
-          result.product_id,
-          result.color || "",
-          result.size || "",
-        ].join(":"),
-        product_id: result.product_id,
-        name: result.name,
-        brand: product.brand,
-        image_url: result.image_url,
-        price: result.unit_price,
-        promotion: result.promotion,
-        quantity: result.quantity,
-        size: result.size,
-        color: result.color,
-        // Real bug fix: attribution was being computed correctly by
-        // the backend (validated against the real recommendation
-        // registry) but then discarded here, so it never survived
-        // into checkout.
-        attribution_source: result.attribution_source,
-        recommendation_id: result.recommendation_id,
-      };
-
-      dispatch({ type: "ADD_ITEM", item });
-      setLastAdded(item);
-      setNotifyId((n) => n + 1);
+      addValidatedCartItem(result, product);
     } finally {
       pendingProductIds.current.delete(pendingKey);
     }
@@ -151,6 +171,7 @@ export function CartProvider({ children }) {
   const value = {
     items: state.items,
     addToCart,
+    addValidatedCartItem,
     removeFromCart,
     updateQuantity,
     clearCart,

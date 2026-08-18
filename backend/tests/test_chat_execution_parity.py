@@ -347,6 +347,50 @@ def _variant_context(product_id="P001"):
     }
 
 
+def test_streaming_recommendation_selection_sets_pending_cart_offer(monkeypatch):
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    context = {
+        "active_selected_products": [
+            {
+                "product_id": "P003",
+                "name": "Wrap Dress",
+                "recommendation_id": "rec_wrap",
+                "recommendation_session_id": "sess_wrap",
+            },
+            {
+                "product_id": "P004",
+                "name": "Slip Dress",
+                "recommendation_id": "rec_slip",
+                "recommendation_session_id": "sess_slip",
+            },
+        ],
+    }
+
+    (reply, products), progress_events = asyncio.run(
+        _collect_stream(
+            App(),
+            [],
+            "I like the second one",
+            conversation_context=context,
+        )
+    )
+
+    assert reply == "Want me to add the Slip Dress to your cart?"
+    assert products == []
+    assert progress_events == []
+    assert context["pending_cart_offer"] == {
+        "product_id": "P004",
+        "product_name": "Slip Dress",
+        "size": None,
+        "color": None,
+        "quantity": 1,
+        "recommendation_id": "rec_slip",
+        "recommendation_session_id": "sess_slip",
+    }
+    assert context["active_product_id"] == "P004"
+    assert context["active_product_name"] == "Slip Dress"
+
+
 def test_product_recommendation_final_result_matches_streaming(monkeypatch):
     result = _assert_ask_streaming_parity(monkeypatch, "Recommend a dress under $80")
 

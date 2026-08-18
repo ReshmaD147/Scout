@@ -5,7 +5,7 @@ from fastapi import APIRouter, HTTPException, Request
 from pydantic import BaseModel, Field, field_validator
 from sse_starlette.sse import EventSourceResponse
 
-from scout.agents.attribution import register_recommendation
+from scout.agents.attribution import apply_attribution_and_cart_offer
 from scout.agents.supervisor import ask, ask_streaming, SPECIALIST_NAMES
 from scout.config import settings
 from scout.services.chat_feedback_service import record_chat_feedback
@@ -135,41 +135,12 @@ async def chat(request: Request, body: ChatRequest) -> ChatResponse:
     SESSION_HISTORIES[session_id] = updated_history
     SESSION_CONTEXTS[session_id] = conversation_context
 
-    # Commerce analytics layer - sits entirely OUTSIDE the safety-critical
-    # evidence/claims/verification/rendering pipeline. Only ever sees
-    # already-verified products; never influences what gets shown to the
-    # customer, only tags what was already decided as genuinely
-    # recommended, for later attribution validation at cart-add time.
-    for product in products:
-        internal_product_id = product.get("product_id")
-        if internal_product_id:
-            product["recommendation_id"] = register_recommendation(
-                product_id=internal_product_id,
-                session_id=session_id,
-            )
-
-    # Phase 2 - proactive cart nudge. Scout gets NO new tool here; this
-    # is a deterministic check of the already-verified, already-rendered
-    # products list, matching the exact pattern used for conversation
-    # context elsewhere in this file. Only offers when there's genuinely
-    # ONE unambiguous internal product in focus - never for a list of
-    # several (e.g. right after "recommend a dress"), since "add it to
-    # your cart" would be ambiguous there. The offer's exact details are
-    # stored in context, so the next turn's confirmation can replay them
-    # precisely without re-parsing anything from free text.
-    internal_products = [p for p in products if p.get("source") == "internal"]
-    if len(internal_products) == 1 and not conversation_context.get("pending_cart_offer"):
-        offer_product = internal_products[0]
-        conversation_context["pending_cart_offer"] = {
-            "product_id": offer_product.get("product_id"),
-            "product_name": offer_product.get("name"),
-            "size": offer_product.get("size"),
-            "color": offer_product.get("color"),
-            "quantity": 1,
-            "recommendation_id": offer_product.get("recommendation_id"),
-        }
-        reply = f"{reply} Want me to add the {offer_product.get('name')} to your cart?"
-
+    reply = apply_attribution_and_cart_offer(
+        products=products,
+        reply=reply,
+        session_id=session_id,
+        conversation_context=conversation_context,
+    )
     SESSION_CONTEXTS[session_id] = conversation_context
 
     return ChatResponse(session_id=session_id, reply=reply, products=products)
@@ -213,16 +184,21 @@ async def chat_stream(request: Request, body: ChatRequest):
                 history,
                 body.message,
                 conversation_context=conversation_context,
+                session_id=session_id,
             ):
                 if kind == "progress":
                     yield {"event": "progress", "data": payload}
                 else:
                     reply_text, products = payload
                     SESSION_HISTORIES[session_id] = history
+                    cart_item = conversation_context.pop("completed_cart_add", None)
                     SESSION_CONTEXTS[session_id] = conversation_context
+                    done_payload = {"reply": reply_text, "products": products}
+                    if cart_item:
+                        done_payload["cart_item"] = cart_item
                     yield {
                         "event": "done",
-                        "data": json.dumps({"reply": reply_text, "products": products}),
+                        "data": json.dumps(done_payload),
                     }
         except Exception:
             yield {"event": "error", "data": "Something went wrong processing that request."}

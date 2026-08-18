@@ -20,6 +20,7 @@ class AddToCartRequest(BaseModel):
     # something over an attribution technicality) - it just means this
     # item won't be counted as Scout-assisted revenue.
     recommendation_id: str | None = None
+    recommendation_session_id: str | None = None
 
 
 @router.post("/cart/add")
@@ -40,6 +41,7 @@ def add_to_cart(request: AddToCartRequest):
             size=request.size,
             color=request.color,
             recommendation_id=request.recommendation_id,
+            recommendation_session_id=request.recommendation_session_id,
         )
     finally:
         session.close()

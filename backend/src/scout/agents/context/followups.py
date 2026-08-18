@@ -310,6 +310,7 @@ def _resolve_recommendation_selection(message: str, context: dict) -> SplitInten
         confidence=0.9,
         product_id=product.get("product_id"),
         recommendation_id=product.get("recommendation_id"),
+        recommendation_session_id=product.get("recommendation_session_id"),
         extraction_source="deterministic_recommendation_selection",
     )
     _record_context_resolution("recommendation_selection", True, structured)

@@ -139,6 +139,8 @@ def create_order(
     session: Session,
     customer_id: str,
     cart_items: list[dict],
+    order_id: str | None = None,
+    status: str = "pending",
 ) -> dict:
     """Business logic: prices are always looked up server-side from the
     real product record — never trusted from the caller. This remains
@@ -146,8 +148,12 @@ def create_order(
     order_repo = OrderRepository(session)
     product_repo = ProductRepository(session)
 
-    order_id = f"O{uuid.uuid4().hex[:8].upper()}"
-    order_repo.create(order_id=order_id, customer_id=customer_id, status="pending")
+    order_id = order_id or f"O{uuid.uuid4().hex[:8].upper()}"
+    existing_order = order_repo.get_by_id(order_id)
+    if existing_order:
+        return get_order(session, order_id)
+
+    order_repo.create(order_id=order_id, customer_id=customer_id, status=status)
 
     for item in cart_items:
         product = product_repo.get_by_id(item["product_id"])

@@ -58,7 +58,7 @@ export async function streamChatMessage(message, sessionId, callbacks = {}) {
       } else if (eventType === "done") {
         try {
           const parsed = JSON.parse(data);
-          onDone?.(parsed.reply, parsed.products || []);
+          onDone?.(parsed.reply, parsed.products || [], parsed.cart_item || null);
         } catch {
           onDone?.(data, []);
         }
@@ -92,6 +92,9 @@ export async function addToCartRequest(productId, quantity = 1, options = {}) {
   // breaking attribution for every cart-add that carried one (e.g. the
   // "Add to Cart" button on chat product cards).
   if (options.recommendation_id) payload.recommendation_id = options.recommendation_id;
+  if (options.recommendation_session_id) {
+    payload.recommendation_session_id = options.recommendation_session_id;
+  }
 
   const response = await fetch(`${BASE_URL}/cart/add`, {
     method: "POST",

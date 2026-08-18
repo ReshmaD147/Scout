@@ -25,7 +25,12 @@ export default function CheckoutForm({ onSuccess }) {
       return;
     }
 
-    onSuccess(paymentIntent);
+    try {
+      await onSuccess(paymentIntent);
+    } catch (finalizeError) {
+      setError(finalizeError.message);
+      setIsProcessing(false);
+    }
   }
 
   return (

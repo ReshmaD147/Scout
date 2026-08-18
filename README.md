@@ -16,7 +16,7 @@ The guiding rule is simple: **anything that can cost money or trust stays determ
 - **Recommendation-driven revenue tracking:** every recommendation is tagged with a verified `recommendation_id`, carried through cart and checkout, so completed sales can be independently attributed back to Scout — see the internal `/admin/impact` dashboard.
 - **Shipment tracking:** authenticated customers can ask about live carrier, status, and estimated delivery for their own orders, with the same read-only-tool and evidence/claims/verification boundary as everything else.
 - **Deterministic tool-first path:** clear, unambiguous requests (a specific recommendation, order lookup, or inventory check) bypass the language model entirely and call the appropriate tool directly — removing a real source of non-deterministic behavior for requests that don't need the model's judgment at all.
-- **Validated baseline:** 413 deterministic backend tests pass, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
+- **Validated baseline:** the deterministic backend test suite passes, frontend lint/build pass, and a separate behavioral evaluation suite (25 real, live scenarios covering routing, authorization, grounding, latency, and multi-turn conversation state) runs against the live app — see [`docs/evaluation.md`](docs/evaluation.md).
 
 ## Architecture At A Glance
 
@@ -201,7 +201,7 @@ An internal `/admin/impact` dashboard presents this live. This mirrors how real 
 
 ## Evaluation Results
 
-Beyond the 413 deterministic unit/integration tests, a separate, live-running evaluation suite (`backend/tests/eval/run_eval.py`) exercises the real, deployed API — no mocking — across single-turn, multi-turn, and routing scenarios, plus dedicated authorization, grounding, and latency checks. See [`docs/evaluation.md`](docs/evaluation.md) for full methodology. Representative results from a real run:
+Beyond the deterministic unit/integration test suite, a separate, live-running evaluation suite (`backend/tests/eval/run_eval.py`) exercises the real, deployed API — no mocking — across single-turn, multi-turn, and routing scenarios, plus dedicated authorization, grounding, and latency checks. See [`docs/evaluation.md`](docs/evaluation.md) for full methodology. Representative results from a real run:
 
 | Metric | Result |
 |---|---|
