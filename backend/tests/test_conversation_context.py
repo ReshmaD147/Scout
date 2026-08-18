@@ -1471,3 +1471,52 @@ def test_api_and_sse_schemas_remain_unchanged():
     assert set(ChatRequest.model_fields) == {"message", "session_id"}
     assert set(ChatResponse.model_fields) == {"session_id", "reply", "products"}
     assert ChatResponse.model_fields["products"].default == []
+
+
+def test_topic_switch_clears_pending_cart_offer_so_later_yes_is_safe(monkeypatch):
+    """Real, live-verified scenario: after a genuine topic switch (a
+    policy question, not a clarification about the same product), the
+    pending cart offer must be cleared - a later, unrelated 'yes' must
+    NOT silently confirm a stale cart-add. Confirmed live tonight: the
+    sequence recommend -> select second item -> ask about return policy
+    -> 'yes' correctly returns an honest 'couldn't verify' rather than
+    adding the stale Slip Dress to the cart.
+    """
+    app = App()
+    context = {
+        "active_selected_products": [
+            {"product_id": "P001", "name": "Black Midi Dress", "category": "dresses"},
+            {"product_id": "P004", "name": "Slip Dress", "category": "dresses"},
+        ],
+        "pending_cart_offer": {
+            "product_id": "P004",
+            "product_name": "Slip Dress",
+            "size": None,
+            "color": None,
+            "quantity": 1,
+            "recommendation_id": None,
+        },
+    }
+    captured = {}
+
+    async def fake_tool(tool_name, args, *, agent_name):
+        captured.update(tool_name=tool_name, args=args, agent_name=agent_name)
+        return []
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "_execute_read_only_tool", fake_tool)
+
+    # A genuine topic switch - a policy question, not a clarification
+    # about the Slip Dress - must clear the pending offer.
+    asyncio.run(
+        supervisor.ask(app, [], "What is your return policy?", conversation_context=context)
+    )
+
+    assert context.get("pending_cart_offer") is None
+
+    # A later "yes" must not silently confirm the (now-cleared) stale offer.
+    reply, _history, _products = asyncio.run(
+        supervisor.ask(app, [], "yes", conversation_context=context)
+    )
+    assert "added" not in reply.lower()
+    assert "slip dress" not in reply.lower()
