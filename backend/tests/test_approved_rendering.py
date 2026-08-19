@@ -67,6 +67,51 @@ def tool_message(name, content):
     return message(name, content, msg_type="tool")
 
 
+def test_internal_product_card_preserves_brand_from_verified_product():
+    products = [
+        {
+            "product_id": "P001",
+            "name": "Black Midi Dress",
+            "brand": "Aria & Co",
+            "price": 79.99,
+            "rating": 4.3,
+        }
+    ]
+    claims = [
+        claim(
+            ClaimType.PRODUCT_IDENTITY,
+            claim_id="cl_name",
+            subject_id="P001",
+            field="name",
+            value="Black Midi Dress",
+        ),
+        claim(
+            ClaimType.PRODUCT_PRICE,
+            claim_id="cl_price",
+            subject_id="P001",
+            field="price",
+            value=79.99,
+        ),
+        claim(
+            ClaimType.PRODUCT_RATING,
+            claim_id="cl_rating",
+            subject_id="P001",
+            field="rating",
+            value=4.3,
+        ),
+    ]
+
+    _reply, rendered_products = render_verified_response(
+        original_reply="I found Black Midi Dress for $79.99.",
+        products=products,
+        proposed_claims=claims,
+        verification_result=result(["cl_name", "cl_price", "cl_rating"]),
+        customer_message="Recommend a dress under $80",
+    )
+
+    assert rendered_products[0]["brand"] == "Aria & Co"
+
+
 def test_color_specific_unavailable_inventory_renders_from_approved_claims():
     claims = [
         claim(

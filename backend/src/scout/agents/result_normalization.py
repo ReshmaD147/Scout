@@ -14,6 +14,7 @@ PRODUCT_FIELDS = {
     "product_id",
     "external_product_id",
     "name",
+    "brand",
     "price",
     "rating",
     "promotion",
@@ -207,6 +208,7 @@ def _product_from_facts(facts: dict[str, Any]) -> dict | None:
     for key in (
         "price",
         "rating",
+        "brand",
         "vendor_name",
         "click_url",
         "category",

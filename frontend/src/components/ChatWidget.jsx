@@ -142,6 +142,12 @@ function ChatProductCard({ product, onInternalProductClick, sessionId, customerI
     try {
       await addToCart(product, 1, {
         recommendation_id: product.recommendation_id,
+        // The chat's OWN session_id - this is what the backend actually
+        // registered the recommendation against. If the customer is also
+        // signed in via demo auth, that's a DIFFERENT session_id, and
+        // using it here would cause the session-bound attribution check
+        // to correctly, but unintentionally, fail closed.
+        recommendation_session_id: sessionId,
       });
       setAddState("added");
       setTimeout(() => setAddState("idle"), 2000);

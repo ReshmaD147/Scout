@@ -131,7 +131,17 @@ export default function CartPage() {
   const { items, updateQuantity, removeFromCart, clearCart, total } = useCart();
   const { sessionId } = useAuth();
   const { chatSessionId } = useChatWidget();
-  const checkoutSessionId = sessionId || chatSessionId;
+  // Real bug fix: this previously preferred the auth/demo sign-in
+  // session over the chat session, but recommendation_id is registered
+  // against the CHAT session specifically. If a customer signs in
+  // (getting a different session_id) after a chat recommendation, using
+  // the auth session here caused the session-bound attribution check to
+  // correctly, but unintentionally, fail closed - the checkout looked
+  // like it came from a different session than the one that actually
+  // earned the recommendation. Prefer whichever session a cart item's
+  // own recommendation was actually registered under, if any.
+  const attributedSessionId = items.find((item) => item.recommendation_session_id)?.recommendation_session_id;
+  const checkoutSessionId = attributedSessionId || sessionId || chatSessionId;
   const [searchParams, setSearchParams] = useSearchParams();
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const [checkoutSession, setCheckoutSession] = useState(null);
@@ -190,6 +200,7 @@ export default function CartPage() {
         color: i.color,
         attribution_source: i.attribution_source,
         recommendation_id: i.recommendation_id,
+        recommendation_session_id: i.recommendation_session_id,
       }));
       const checkoutDetails = {
         contact_email: contactEmail.trim().toLowerCase(),

@@ -46,6 +46,7 @@ def _context_product(product: dict) -> dict | None:
         "name",
         "source",
         "category",
+        "brand",
         "image_url",
         "vendor_name",
         "click_url",
