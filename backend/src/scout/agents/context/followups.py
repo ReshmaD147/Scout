@@ -468,14 +468,37 @@ def _resolve_size_answer_after_selection(message: str, context: dict) -> str | N
     matched_text = size_match.group(1).strip().lower()
     reverse_size_names = {v.lower(): k for k, v in SIZE_NAMES.items()}
     requested_size = reverse_size_names.get(matched_text, matched_text.upper())
+    # Real bug fix, found via live testing before a demo: the product's
+    # own name often implies a specific color (e.g. "Black Midi Dress"
+    # genuinely means black, not any color) - checking the top-level
+    # in_stock flag alone is misleading, since it's True if ANY color
+    # has that size in stock, even if the color the customer actually
+    # means does not. Now matches the specific variant (size AND the
+    # name-implied color, if any) within the real, live stock data.
+    implied_color = None
+    for known_color in ("black", "white", "blue", "red", "floral", "navy", "gray", "grey", "green", "beige", "brown", "pink"):
+        if known_color in active_product_name.lower():
+            implied_color = known_color
+            break
     try:
         from scout.mcp_server import server as local_tools
-        result = local_tools.stock(product_id=active_product_id, size=requested_size)
+        result = local_tools.stock(product_id=active_product_id, size=requested_size, color=implied_color or "")
     except Exception:
         return None
-    if not isinstance(result, dict) or not result.get("in_stock"):
-        from scout.agents.rendering import _natural_size
-        natural = _natural_size(requested_size) or requested_size
+    variants = result.get("variants") if isinstance(result, dict) else None
+    matched_variant = None
+    if isinstance(variants, list):
+        for v in variants:
+            if not isinstance(v, dict):
+                continue
+            if str(v.get("size", "")).upper() != requested_size:
+                continue
+            if implied_color and str(v.get("color", "")).lower() != implied_color:
+                continue
+            matched_variant = v
+            break
+    is_genuinely_in_stock = bool(matched_variant and matched_variant.get("in_stock"))
+    if not is_genuinely_in_stock:
         return f"That size doesn't look right for the {active_product_name} — could you double check and try again?"
     from scout.agents.rendering import _natural_size
     natural_size = _natural_size(requested_size) or requested_size
@@ -483,7 +506,7 @@ def _resolve_size_answer_after_selection(message: str, context: dict) -> str | N
         "product_id": active_product_id,
         "product_name": active_product_name,
         "size": requested_size,
-        "color": None,
+        "color": matched_variant.get("color"),
         "quantity": 1,
         "recommendation_id": None,
         "recommendation_session_id": None,
