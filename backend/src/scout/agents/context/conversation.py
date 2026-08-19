@@ -20,6 +20,7 @@ CONTEXT_KEYS = {
     "pending_missing_fields",
     "pending_store_availability_product_id",
     "pending_cart_offer",
+    "pending_variant_choice",
     "completed_cart_add",
     "last_out_of_stock_product_id",
 }
@@ -139,6 +140,9 @@ def _update_context_from_verified_turn(
         if claim.claim_type == ClaimType.PRODUCT_IDENTITY.value and claim.field in {"name", "product_name"}
     }
     available_cart_offer = None
+    available_variants = []
+    seen_variant_keys = set()
+
     for claim in approved_claims:
         if claim.claim_type in {
             ClaimType.ORDER_STATUS.value,
@@ -147,32 +151,145 @@ def _update_context_from_verified_turn(
             ClaimType.RETURN_ELIGIBILITY.value,
         } and claim.subject_id:
             context["active_order_id"] = claim.subject_id
+
         subject = str(claim.subject_id or "")
         product_id = _product_id_from_inventory_subject(subject)
         if not product_id:
             continue
+
         context["active_product_id"] = product_id
+
         if product_names.get(product_id):
             context["active_product_name"] = product_names[product_id]
+
         if ":size:" in subject:
-            context["requested_size"] = subject.split(":size:", 1)[1].split(":", 1)[0]
+            context["requested_size"] = (
+                subject.split(":size:", 1)[1].split(":", 1)[0]
+            )
+
         if ":color:" in subject:
-            context["requested_color"] = subject.split(":color:", 1)[1].split(":", 1)[0]
-        if claim.claim_type == ClaimType.INVENTORY_AVAILABILITY.value and claim.value is True:
-            size = subject.split(":size:", 1)[1].split(":", 1)[0] if ":size:" in subject else None
-            color = subject.split(":color:", 1)[1].split(":", 1)[0] if ":color:" in subject else None
-            if size or color:
-                product_name = product_names.get(product_id) or context.get("active_product_name")
-                if product_name:
-                    available_cart_offer = {
-                        "product_id": product_id,
-                        "product_name": product_name,
-                        "size": size,
-                        "color": color,
-                        "quantity": 1,
-                        "recommendation_id": None,
-                        "recommendation_session_id": None,
-                    }
+            context["requested_color"] = (
+                subject.split(":color:", 1)[1].split(":", 1)[0]
+            )
+
+        if (
+            claim.claim_type == ClaimType.INVENTORY_AVAILABILITY.value
+            and claim.value is True
+        ):
+            size = (
+                subject.split(":size:", 1)[1].split(":", 1)[0]
+                if ":size:" in subject
+                else None
+            )
+            color = (
+                subject.split(":color:", 1)[1].split(":", 1)[0]
+                if ":color:" in subject
+                else None
+            )
+
+            if not (size or color):
+                continue
+
+            product_name = (
+                product_names.get(product_id)
+                or context.get("active_product_name")
+            )
+            if not product_name:
+                continue
+
+            # Recover the attribution belonging to this exact product.
+            recommendation_id = None
+            recommendation_session_id = None
+
+            for selected_product in (
+                context.get("active_selected_products") or []
+            ):
+                if selected_product.get("product_id") == product_id:
+                    recommendation_id = selected_product.get(
+                        "recommendation_id"
+                    )
+                    recommendation_session_id = selected_product.get(
+                        "recommendation_session_id"
+                    )
+                    break
+
+            variant = {
+                "product_id": product_id,
+                "product_name": product_name,
+                "size": size,
+                "color": color,
+                "quantity": 1,
+                "recommendation_id": recommendation_id,
+                "recommendation_session_id": recommendation_session_id,
+            }
+
+            # Exact duplicate claims must never become duplicate choices.
+            variant_key = (
+                product_id,
+                str(size or "").upper(),
+                str(color or "").lower(),
+            )
+
+            if variant_key not in seen_variant_keys:
+                seen_variant_keys.add(variant_key)
+                available_variants.append(variant)
+
+    # Verification may produce both an aggregate availability claim such as
+    # "size L is available" and a more-specific claim such as
+    # "black, size L is available". The aggregate claim is evidence about
+    # the same real variant, not a separate customer choice.
+    #
+    # Preserve genuinely different variants, such as:
+    #   white / 8
+    #   black / 9
+    #
+    # but remove less-specific duplicates such as:
+    #   None / L
+    #   black / L
+    def _is_dominated_variant(candidate: dict) -> bool:
+        candidate_product = candidate.get("product_id")
+        candidate_size = candidate.get("size")
+        candidate_color = candidate.get("color")
+
+        for other in available_variants:
+            if other is candidate:
+                continue
+            if other.get("product_id") != candidate_product:
+                continue
+
+            other_size = other.get("size")
+            other_color = other.get("color")
+
+            # size-only aggregate is dominated by same size + real color
+            if (
+                candidate_size
+                and not candidate_color
+                and other_size == candidate_size
+                and other_color
+            ):
+                return True
+
+            # color-only aggregate is dominated by same color + real size
+            if (
+                candidate_color
+                and not candidate_size
+                and other_color == candidate_color
+                and other_size
+            ):
+                return True
+
+        return False
+
+    available_variants = [
+        variant
+        for variant in available_variants
+        if not _is_dominated_variant(variant)
+    ]
+
+    available_variant_count = len(available_variants)
+
+    if available_variant_count == 1:
+        available_cart_offer = available_variants[0]
     if structured_intent:
         if structured_intent.budget_max is not None:
             context["requested_budget_max"] = structured_intent.budget_max
@@ -182,5 +299,23 @@ def _update_context_from_verified_turn(
             context["requested_color"] = structured_intent.color
         if structured_intent.location:
             context["requested_store"] = structured_intent.location
-    if available_cart_offer:
+    if available_cart_offer and available_variant_count == 1:
+        # Real bug fix, found via live testing before a demo: this loop
+        # previously overwrote available_cart_offer for EVERY genuinely
+        # in-stock variant claim, meaning when a size-check showed TWO
+        # different, distinct in-stock variants (e.g. white/8 AND
+        # black/9), the LAST one silently won, and a follow-up "add it
+        # to my cart" added that variant without ever asking which one
+        # the customer actually meant - a real, meaningful correctness
+        # risk, not just a UX nicety. Now only sets an automatic
+        # pending offer when there is genuinely exactly ONE available
+        # variant to be unambiguous about.
         context["pending_cart_offer"] = available_cart_offer
+        context["pending_variant_choice"] = None
+    elif available_variant_count > 1:
+        # Stop and ask the customer to choose, rather than guessing or
+        # silently picking one - store the genuinely ambiguous options
+        # so the next "add it to my cart" can trigger a specific,
+        # helpful clarifying question naming them.
+        context["pending_cart_offer"] = None
+        context["pending_variant_choice"] = available_variants

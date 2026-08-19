@@ -499,6 +499,10 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
         for item in (conversation_context or {}).get("active_selected_products") or []:
             if item.get("product_id") == selected_product_id:
                 product_name = item.get("name")
+                selected_recommendation_id = (
+                    selected_recommendation_id
+                    or item.get("recommendation_id")
+                )
                 selected_recommendation_session_id = (
                     selected_recommendation_session_id
                     or item.get("recommendation_session_id")
@@ -582,7 +586,17 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
                 size=split_result.structured_intent.size,
                 color=split_result.structured_intent.color,
                 recommendation_id=split_result.structured_intent.recommendation_id,
-                recommendation_session_id=None,
+                # Real bug fix: this was hardcoded to None, meaning the
+                # ordinal/name-selection confirmation path ("I like the
+                # X" -> "yes") never carried recommendation_session_id
+                # through at all - genuine attribution was silently lost
+                # for this specific path, even after the earlier
+                # session-binding fix (which only covered the direct
+                # chat-card "Add to Cart" button path). Confirmed via
+                # live testing before a demo: a real purchase through
+                # this exact flow showed attribution_source=None despite
+                # a genuine, valid recommendation.
+                recommendation_session_id=split_result.structured_intent.recommendation_session_id,
             )
         finally:
             session.close()
@@ -594,7 +608,13 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
             # trailing "review your cart" sentence, since repeating that
             # after every single add would start to feel scripted.
             # Refined per direct feedback.
-            color_prefix = f"{cart_result['color']} " if cart_result.get("color") else ""
+            color_value = str(cart_result.get("color") or "").strip()
+            product_name_lower = str(cart_result["name"]).lower()
+            color_prefix = (
+                f"{color_value} "
+                if color_value and color_value.lower() not in product_name_lower
+                else ""
+            )
             natural_size = _natural_size(cart_result.get("size"))
             size_suffix = f" in {natural_size}" if natural_size else ""
             confirm_reply = f"Done — I added the {color_prefix}{cart_result['name']}{size_suffix} to your cart."
@@ -881,6 +901,10 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
                 for item in (conversation_context or {}).get("active_selected_products") or []:
                     if item.get("product_id") == selected_product_id:
                         product_name = item.get("name")
+                        selected_recommendation_id = (
+                            selected_recommendation_id
+                            or item.get("recommendation_id")
+                        )
                         selected_recommendation_session_id = (
                             selected_recommendation_session_id
                             or item.get("recommendation_session_id")
@@ -888,18 +912,33 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
                         break
 
                 if product_name:
-                    conversation_context["pending_cart_offer"] = {
-                        "product_id": selected_product_id,
-                        "product_name": product_name,
-                        "size": None,
-                        "color": None,
-                        "quantity": 1,
-                        "recommendation_id": selected_recommendation_id,
-                        "recommendation_session_id": selected_recommendation_session_id,
-                    }
+                    # Keep streaming behavior consistent with the normal
+                    # recommendation-selection path. If this product has
+                    # required sizes, do not create a cart offer before the
+                    # customer chooses one.
                     conversation_context["active_product_id"] = selected_product_id
                     conversation_context["active_product_name"] = product_name
-                    reply = f"Want me to add the {product_name} to your cart?"
+
+                    in_stock_sizes, _ = _resolve_product_size_state(
+                        selected_product_id
+                    )
+
+                    if in_stock_sizes:
+                        # Required variant is unresolved. The customer must
+                        # choose the size before a pending cart offer exists.
+                        conversation_context["pending_cart_offer"] = None
+                        reply = "Nice pick — what size would you like?"
+                    else:
+                        conversation_context["pending_cart_offer"] = {
+                            "product_id": selected_product_id,
+                            "product_name": product_name,
+                            "size": None,
+                            "color": None,
+                            "quantity": 1,
+                            "recommendation_id": selected_recommendation_id,
+                            "recommendation_session_id": selected_recommendation_session_id,
+                        }
+                        reply = f"Want me to add the {product_name} to your cart?"
                 else:
                     reply = "Sorry, I couldn't identify that item. Could you name it directly?"
 
@@ -930,7 +969,13 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
                     from scout.agents.rendering import _natural_size
                     # Color first, then size, for a more natural reading
                     # order ("white, size 8" rather than "size 8, white").
-                    color_prefix = f"{cart_result['color']} " if cart_result.get("color") else ""
+                    color_value = str(cart_result.get("color") or "").strip()
+                    product_name_lower = str(cart_result["name"]).lower()
+                    color_prefix = (
+                        f"{color_value} "
+                        if color_value and color_value.lower() not in product_name_lower
+                        else ""
+                    )
                     natural_size = _natural_size(cart_result.get("size"))
                     size_suffix = f" in {natural_size}" if natural_size else ""
                     reply = f"Done — I added the {color_prefix}{cart_result['name']}{size_suffix} to your cart."

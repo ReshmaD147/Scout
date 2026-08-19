@@ -347,7 +347,7 @@ def _variant_context(product_id="P001"):
     }
 
 
-def test_streaming_recommendation_selection_sets_pending_cart_offer(monkeypatch):
+def test_streaming_recommendation_selection_requires_size_before_cart_offer(monkeypatch):
     monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
     context = {
         "active_selected_products": [
@@ -375,18 +375,14 @@ def test_streaming_recommendation_selection_sets_pending_cart_offer(monkeypatch)
         )
     )
 
-    assert reply == "Want me to add the Slip Dress to your cart?"
+    # Streaming must enforce the same variant-safety invariant as the
+    # non-streaming path: a product with sizes cannot reach a cart offer
+    # until the customer chooses a size.
+    assert reply == "Nice pick — what size would you like?"
     assert products == []
     assert progress_events == []
-    assert context["pending_cart_offer"] == {
-        "product_id": "P004",
-        "product_name": "Slip Dress",
-        "size": None,
-        "color": None,
-        "quantity": 1,
-        "recommendation_id": "rec_slip",
-        "recommendation_session_id": "sess_slip",
-    }
+
+    assert context.get("pending_cart_offer") is None
     assert context["active_product_id"] == "P004"
     assert context["active_product_name"] == "Slip Dress"
 

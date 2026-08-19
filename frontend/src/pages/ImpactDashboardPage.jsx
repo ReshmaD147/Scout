@@ -39,7 +39,7 @@ export default function ImpactDashboardPage() {
         <h1>How much has Scout actually sold?</h1>
         <p className="impact-subtitle">
           Deterministic, backend-calculated revenue attribution. No AI is involved in
-          producing these numbers — this is a direct SQL aggregation over completed orders
+          producing these numbers — this is a direct SQL aggregation over paid orders
           where the purchase was validated back to a real Scout recommendation.
         </p>
       </div>
@@ -56,7 +56,7 @@ export default function ImpactDashboardPage() {
               ${data.scout_assisted_revenue.toFixed(2)}
             </span>
             <span className="impact-hero-note">
-              Sum of completed, paid order-item value where attribution was independently
+              Sum of paid order-item value where attribution was independently
               validated at cart-add time — not the originally recommended price.
             </span>
           </div>

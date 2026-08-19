@@ -177,10 +177,7 @@ def test_available_variant_followup_can_be_confirmed_into_cart(monkeypatch):
         supervisor.ask(app, [], "can you add it in cart?", conversation_context=context)
     )
 
-    assert reply == (
-        "Done — I added the Black Midi Dress in large, black to your cart. "
-        "You can review your cart when you’re ready to check out."
-    )
+    assert reply == "Done — I added the Black Midi Dress in large to your cart."
     assert products == []
     assert added == {
         "product_id": "P001",
@@ -2052,3 +2049,42 @@ def test_topic_switch_clears_pending_cart_offer_so_later_yes_is_safe(monkeypatch
     )
     assert "added" not in reply.lower()
     assert "slip dress" not in reply.lower()
+
+
+def test_cart_confirmation_preserves_recommendation_attribution(monkeypatch):
+    app = App()
+    context = {
+        "pending_cart_offer": {
+            "product_id": "P001",
+            "product_name": "Black Midi Dress",
+            "size": "M",
+            "color": "black",
+            "quantity": 1,
+            "recommendation_id": "rec_real_123",
+            "recommendation_session_id": "sess_real_123",
+        }
+    }
+
+    added = {}
+
+    def fake_add_to_cart(session, **kwargs):
+        added.update(kwargs)
+        return {
+            "success": True,
+            "name": "Black Midi Dress",
+            "size": kwargs["size"],
+            "color": kwargs["color"],
+        }
+
+    monkeypatch.setattr(supervisor, "get_chat_model", lambda: object())
+    monkeypatch.setattr(supervisor, "add_to_cart_service", fake_add_to_cart)
+
+    reply, _history, _products = asyncio.run(
+        supervisor.ask(app, [], "yes", conversation_context=context)
+    )
+
+    assert added["product_id"] == "P001"
+    assert added["recommendation_id"] == "rec_real_123"
+    assert added["recommendation_session_id"] == "sess_real_123"
+    assert added["size"] == "M"
+    assert added["color"] == "black"

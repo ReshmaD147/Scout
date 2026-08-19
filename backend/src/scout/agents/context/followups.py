@@ -174,6 +174,7 @@ def _continue_pending_cart_offer(message: str, context: dict) -> SplitIntentResu
         confidence=0.98,
         product_id=offer.get("product_id"),
         recommendation_id=offer.get("recommendation_id"),
+        recommendation_session_id=offer.get("recommendation_session_id"),
         size=offer.get("size"),
         color=offer.get("color"),
         extraction_source="deterministic_cart_offer_confirmation",
@@ -391,16 +392,18 @@ def _variant_choice_clarification(context: dict) -> str | None:
     for variant in pending_variants:
         color = variant.get("color")
         size = variant.get("size")
+
         if color and size:
-            options.append(f"{color} pair in size {size}")
+            options.append(f"the {color} one in size {size}")
         elif color:
-            options.append(f"{color} pair")
+            options.append(f"the {color} one")
         elif size:
-            options.append(f"pair in size {size}")
+            options.append(f"the one in size {size}")
         else:
             options.append("that option")
-    options_text = " or the ".join(options)
-    return f"Sure — would you like the {options_text}?"
+
+    options_text = " or ".join(options)
+    return f"Sure — would you like {options_text}?"
 
 
 SIZE_RECALL_RE = re.compile(
@@ -502,14 +505,27 @@ def _resolve_size_answer_after_selection(message: str, context: dict) -> str | N
         return f"That size doesn't look right for the {active_product_name} — could you double check and try again?"
     from scout.agents.rendering import _natural_size
     natural_size = _natural_size(requested_size) or requested_size
+    recommendation_id = None
+    recommendation_session_id = None
+
+    # Preserve attribution from the exact recommendation that originally
+    # produced this product. Variant selection must not erase it.
+    for product in context.get("active_selected_products") or []:
+        if product.get("product_id") == active_product_id:
+            recommendation_id = product.get("recommendation_id")
+            recommendation_session_id = product.get(
+                "recommendation_session_id"
+            )
+            break
+
     context["pending_cart_offer"] = {
         "product_id": active_product_id,
         "product_name": active_product_name,
         "size": requested_size,
         "color": matched_variant.get("color"),
         "quantity": 1,
-        "recommendation_id": None,
-        "recommendation_session_id": None,
+        "recommendation_id": recommendation_id,
+        "recommendation_session_id": recommendation_session_id,
     }
     return f"{natural_size.capitalize()} is available. Want me to add the {active_product_name} in {natural_size} to your cart?"
 

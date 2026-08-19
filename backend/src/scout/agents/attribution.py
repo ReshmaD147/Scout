@@ -69,14 +69,31 @@ def apply_attribution_and_cart_offer(
     `conversation_context` in place (setting pending_cart_offer), and
     returns the possibly-appended reply text.
     """
+    active_selected_products = (
+        conversation_context.get("active_selected_products") or []
+    )
+
     for product in products:
         internal_product_id = product.get("product_id")
-        if internal_product_id:
-            product["recommendation_id"] = register_recommendation(
-                product_id=internal_product_id,
-                session_id=session_id,
-            )
-            product["recommendation_session_id"] = session_id
+        if not internal_product_id:
+            continue
+
+        recommendation_id = register_recommendation(
+            product_id=internal_product_id,
+            session_id=session_id,
+        )
+
+        product["recommendation_id"] = recommendation_id
+        product["recommendation_session_id"] = session_id
+
+        # active_selected_products is created earlier in the verified-turn
+        # pipeline, before attribution is generated. Keep conversation
+        # memory synchronized with the exact recommendation shown.
+        for context_product in active_selected_products:
+            if context_product.get("product_id") == internal_product_id:
+                context_product["recommendation_id"] = recommendation_id
+                context_product["recommendation_session_id"] = session_id
+                break
 
     internal_products = [p for p in products if p.get("source") == "internal"]
     if len(internal_products) == 1 and not conversation_context.get("pending_cart_offer"):
