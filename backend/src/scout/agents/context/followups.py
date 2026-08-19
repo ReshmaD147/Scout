@@ -363,9 +363,189 @@ def _resolve_recommendation_selection(message: str, context: dict) -> SplitInten
     )
 
 
+CART_ADD_REQUEST_RE = re.compile(
+    r"(?:can you |could you |please )?add (?:it|this|that|one)(?: (?:to|in) (?:my )?cart)?",
+    re.IGNORECASE,
+)
+
+
+def _variant_choice_clarification(context: dict) -> str | None:
+    """Stop-and-ask rule: if a cart request refers to a product with
+    more than one valid, unresolved variant, ask the customer to choose
+    rather than guessing or silently picking one. Confirmed via real,
+    live testing before a demo: a size-check showing two genuinely
+    different in-stock variants (e.g. white/8 and black/9), followed by
+    "add it to my cart", was previously resolving to whichever variant
+    happened to be checked LAST, with no indication to the customer
+    that a choice was ever made on their behalf.
+
+    Deliberately omits the product name (e.g. "Leather Sneakers") since
+    it's already established in conversation - refined per direct
+    feedback that repeating it here sounds less natural, more like a
+    real salesperson who already knows what's being discussed.
+    """
+    pending_variants = context.get("pending_variant_choice")
+    if not pending_variants or len(pending_variants) < 2:
+        return None
+    options = []
+    for variant in pending_variants:
+        color = variant.get("color")
+        size = variant.get("size")
+        if color and size:
+            options.append(f"{color} pair in size {size}")
+        elif color:
+            options.append(f"{color} pair")
+        elif size:
+            options.append(f"pair in size {size}")
+        else:
+            options.append("that option")
+    options_text = " or the ".join(options)
+    return f"Sure — would you like the {options_text}?"
+
+
+SIZE_RECALL_RE = re.compile(
+    r"\bwhich (?:size|color|colour)\b.*\b(?:add|added|order|pick)\b|"
+    r"\bwhat size\b.*\b(?:add|added)\b",
+    re.IGNORECASE,
+)
+
+
+def _resolve_completed_cart_add_recall(message: str, context: dict) -> str | None:
+    """Answers a genuine, honest follow-up like "which size did you add?"
+    using the REAL, actual result of the most recent, successful cart-add
+    - never guessing or claiming not to know when the real answer is
+    genuinely available in context. Confirmed via live testing: a
+    customer asking this right after a successful add deserves a real,
+    correct answer, not "I don't have visibility."
+    """
+    if not SIZE_RECALL_RE.search(message or ""):
+        return None
+    completed = context.get("completed_cart_add")
+    if not completed or not completed.get("success"):
+        return None
+    from scout.agents.rendering import _natural_size
+    bits = []
+    if completed.get("color"):
+        bits.append(completed["color"])
+    natural_size = _natural_size(completed.get("size"))
+    if natural_size:
+        bits.append(natural_size)
+    if not bits:
+        return None
+    return ", ".join(bits).capitalize() + "."
+
+
+def _resolve_size_answer_after_selection(message: str, context: dict) -> str | None:
+    """Detects a genuine answer ("medium", "size 8") to the "what size
+    would you like?" question asked right after a name/ordinal product
+    selection (see supervisor.py's recommendation_selection handling).
+    Validates the requested size against REAL, live stock before
+    creating the pending_cart_offer - never assumes the customer's
+    stated size is genuinely available. Confirmed via live testing: the
+    correct flow is always ask -> customer states a size -> confirm
+    genuine availability -> THEN offer to add, never skipping the ask
+    step even when only one size exists.
+    """
+    active_product_id = context.get("active_product_id")
+    active_product_name = context.get("active_product_name")
+    if not active_product_id or not active_product_name:
+        return None
+    if context.get("pending_cart_offer") or context.get("pending_variant_choice"):
+        return None
+    normalized = (message or "").strip().strip(".!?")
+    # Matches both short size codes (M, L, XL, 8, 9) and full natural-
+    # language words (medium, large, small) - the earlier {1,4} length
+    # limit only matched short codes, missing genuine, common answers
+    # like "Medium" (6 characters). Confirmed via live testing.
+    size_match = re.fullmatch(
+        r"(?:size\s+)?([A-Za-z0-9]{1,4}|extra small|small|medium|large|extra large|double extra large)",
+        normalized,
+        re.IGNORECASE,
+    )
+    if not size_match:
+        return None
+    from scout.agents.rendering import SIZE_NAMES
+    matched_text = size_match.group(1).strip().lower()
+    reverse_size_names = {v.lower(): k for k, v in SIZE_NAMES.items()}
+    requested_size = reverse_size_names.get(matched_text, matched_text.upper())
+    try:
+        from scout.mcp_server import server as local_tools
+        result = local_tools.stock(product_id=active_product_id, size=requested_size)
+    except Exception:
+        return None
+    if not isinstance(result, dict) or not result.get("in_stock"):
+        from scout.agents.rendering import _natural_size
+        natural = _natural_size(requested_size) or requested_size
+        return f"That size doesn't look right for the {active_product_name} — could you double check and try again?"
+    from scout.agents.rendering import _natural_size
+    natural_size = _natural_size(requested_size) or requested_size
+    context["pending_cart_offer"] = {
+        "product_id": active_product_id,
+        "product_name": active_product_name,
+        "size": requested_size,
+        "color": None,
+        "quantity": 1,
+        "recommendation_id": None,
+        "recommendation_session_id": None,
+    }
+    return f"{natural_size.capitalize()} is available. Want me to add the {active_product_name} in {natural_size} to your cart?"
+
+
+def _resolve_variant_choice_answer(message: str, context: dict) -> str | None:
+    """Detects a genuine answer to the variant-choice clarifying question
+    we just asked (e.g. "size 8", "the black one", "white") and sets the
+    normal pending_cart_offer for that SPECIFIC, now-unambiguous variant,
+    generating the standard "want me to add X?" confirmation - reusing
+    the exact same, already-tested confirmation mechanism rather than
+    inventing a new one.
+    """
+    pending_variants = context.get("pending_variant_choice")
+    if not pending_variants or len(pending_variants) < 2:
+        return None
+    normalized = (message or "").strip().strip(".!?").lower()
+    matches = []
+    for variant in pending_variants:
+        size = str(variant.get("size") or "").lower()
+        color = str(variant.get("color") or "").lower()
+        if (size and size in normalized) or (color and color in normalized):
+            matches.append(variant)
+    if len(matches) != 1:
+        return None
+    chosen = matches[0]
+    context["pending_variant_choice"] = None
+    context["pending_cart_offer"] = {
+        "product_id": chosen["product_id"],
+        "product_name": chosen["product_name"],
+        "size": chosen.get("size"),
+        "color": chosen.get("color"),
+        "quantity": 1,
+        "recommendation_id": chosen.get("recommendation_id"),
+        "recommendation_session_id": chosen.get("recommendation_session_id"),
+    }
+    # Color goes right before the product name ("the white Leather
+    # Sneakers"), size goes after ("in size 8") - refined per direct
+    # feedback for a more natural, salesperson-like phrasing.
+    color_prefix = f"{chosen['color']} " if chosen.get("color") else ""
+    size_suffix = f" in size {chosen['size']}" if chosen.get("size") else ""
+    return f"Got it — want me to add the {color_prefix}{chosen['product_name']}{size_suffix} to your cart?"
+
+
 def _resolve_follow_up_intent(message: str, context: dict) -> StructuredIntent | str | None:
     base_intent = classify_clear_single_intent(message)
     normalized = (message or "").lower()
+    if CART_ADD_REQUEST_RE.fullmatch((message or "").strip().strip(".!?")):
+        clarification = _variant_choice_clarification(context)
+        if clarification:
+            return clarification
+    cart_recall = _resolve_completed_cart_add_recall(message, context)
+    if cart_recall:
+        return cart_recall
+    size_answer = _resolve_size_answer_after_selection(message, context)
+    if size_answer:
+        return size_answer
+    variant_answer = _resolve_variant_choice_answer(message, context)
+    if variant_answer:
+        return variant_answer
     order_follow_up = _resolve_order_follow_up_intent(message, context, base_intent)
     if order_follow_up is not None:
         return order_follow_up

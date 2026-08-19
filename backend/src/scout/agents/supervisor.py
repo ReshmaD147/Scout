@@ -505,6 +505,38 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
                 )
                 break
 
+        # Enforced invariant: no product with unresolved, required
+        # variants can reach a cart offer/confirmation. If genuinely
+        # more than one real, in-stock size (or color) exists, stop and
+        # ask which one BEFORE ever creating a pending_cart_offer -
+        # rather than silently defaulting to no size, which produced a
+        # real, confusing gap found via live testing: an item could be
+        # added to cart with no size ever specified or confirmed.
+        if product_name:
+            in_stock_sizes, _ = _resolve_product_size_state(selected_product_id)
+            # Real, important rule: the customer must choose a size
+            # themselves whenever the product genuinely HAS sizes -
+            # never auto-fill it into the offer just because there's
+            # only one option. A single available size is still a real
+            # choice to confirm, not something to presume. Only skip
+            # asking when the product has NO size concept at all (an
+            # empty in_stock_sizes list, e.g. a one-size-fits-all item).
+            if in_stock_sizes:
+                # Real bug fix: this early return happened BEFORE
+                # active_product_id/active_product_name were set below,
+                # so the size-answer handler (which reads them from
+                # context) picked up whichever product was active from
+                # an EARLIER turn instead of the one just selected here.
+                # Confirmed via live testing: "I like the Denim Jacket"
+                # -> "what size?" -> "Medium" incorrectly offered a
+                # completely different, earlier product.
+                conversation_context["active_product_id"] = selected_product_id
+                conversation_context["active_product_name"] = product_name
+                variant_question = "Nice pick — what size would you like?"
+                history.append({"role": "user", "content": sub_intents[0]})
+                history.append({"role": "assistant", "content": variant_question})
+                return variant_question, history, []
+
         if product_name:
             conversation_context["pending_cart_offer"] = {
                 "product_id": selected_product_id,
@@ -557,17 +589,17 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
 
         if cart_result.get("success"):
             from scout.agents.rendering import _natural_size
-            variant_bits = []
+            # Color goes right before the product name ("the white
+            # Leather Sneakers"), size goes after ("in size 8") - and no
+            # trailing "review your cart" sentence, since repeating that
+            # after every single add would start to feel scripted.
+            # Refined per direct feedback.
+            color_prefix = f"{cart_result['color']} " if cart_result.get("color") else ""
             natural_size = _natural_size(cart_result.get("size"))
-            if natural_size:
-                variant_bits.append(natural_size)
-            if cart_result.get("color"):
-                variant_bits.append(cart_result["color"])
-            variant_text = f" in {', '.join(variant_bits)}" if variant_bits else ""
-            confirm_reply = (
-                f"Done — I added the {cart_result['name']}{variant_text} to your cart. "
-                "You can review your cart when you’re ready to check out."
-            )
+            size_suffix = f" in {natural_size}" if natural_size else ""
+            confirm_reply = f"Done — I added the {color_prefix}{cart_result['name']}{size_suffix} to your cart."
+            if conversation_context is not None:
+                conversation_context["completed_cart_add"] = cart_result
         else:
             confirm_reply = cart_result.get("error", "I couldn't add that to your cart — want to try again?")
 
@@ -610,6 +642,49 @@ async def _ask_body(app, history: list[dict], message: str, debug: bool = False,
     final_reply = merge_answers(splitter_model, message, sub_answers)
 
     return final_reply, history, all_products
+
+
+def _resolve_product_size_state(product_id: str) -> tuple[list[str], str | None]:
+    """Real, live, deterministic check of a product's genuinely in-stock
+    sizes - returns (all_in_stock_sizes, the_single_size_if_exactly_one).
+    Used to enforce the invariant that no product with unresolved,
+    required variants can reach a cart offer/confirmation, and so that
+    even a single, unambiguous size still gets explicitly stated rather
+    than silently defaulting to no size at all.
+    """
+    try:
+        from scout.mcp_server import server as local_tools
+        result = local_tools.stock(product_id=product_id)
+    except Exception:
+        return [], None
+    if not isinstance(result, dict):
+        return [], None
+    variants = result.get("variants") or []
+    in_stock_sizes = sorted({
+        v.get("size") for v in variants
+        if isinstance(v, dict) and v.get("in_stock") and v.get("size")
+    })
+    single_size = in_stock_sizes[0] if len(in_stock_sizes) == 1 else None
+    return in_stock_sizes, single_size
+
+
+def _size_choice_question_if_needed(product_id: str, product_name: str) -> str | None:
+    """Enforced invariant: a product with more than one genuinely
+    available (in-stock) size cannot reach a cart offer/confirmation
+    without the customer choosing one first. Deterministic, no model
+    involvement. Returns a natural clarifying question if genuine
+    ambiguity exists, or None if there's only one real size (or none at
+    all, e.g. a one-size-fits-all item), in which case the normal flow
+    proceeds unchanged (see _resolve_product_size_state for getting that
+    single size explicitly, used by the caller).
+    """
+    in_stock_sizes, _ = _resolve_product_size_state(product_id)
+    if len(in_stock_sizes) <= 1:
+        return None
+    from scout.agents.rendering import _natural_size, _join_phrases
+    natural_sizes = [_natural_size(s) or s for s in in_stock_sizes]
+    sizes_text = _join_phrases(natural_sizes)
+    return f"The {product_name} is available in {sizes_text}. Which size would you like?"
 
 
 async def ask(app, history: list[dict], message: str, debug: bool = False, conversation_context: dict | None = None, session_id: str | None = None):
@@ -853,17 +928,12 @@ async def ask_streaming(app, history: list[dict], message: str, debug: bool = Fa
 
                 if cart_result.get("success"):
                     from scout.agents.rendering import _natural_size
-                    variant_bits = []
+                    # Color first, then size, for a more natural reading
+                    # order ("white, size 8" rather than "size 8, white").
+                    color_prefix = f"{cart_result['color']} " if cart_result.get("color") else ""
                     natural_size = _natural_size(cart_result.get("size"))
-                    if natural_size:
-                        variant_bits.append(natural_size)
-                    if cart_result.get("color"):
-                        variant_bits.append(cart_result["color"])
-                    variant_text = f" in {', '.join(variant_bits)}" if variant_bits else ""
-                    reply = (
-                        f"Done — I added the {cart_result['name']}{variant_text} to your cart. "
-                        "You can review your cart when you’re ready to check out."
-                    )
+                    size_suffix = f" in {natural_size}" if natural_size else ""
+                    reply = f"Done — I added the {color_prefix}{cart_result['name']}{size_suffix} to your cart."
                     if conversation_context is not None:
                         conversation_context["completed_cart_add"] = cart_result
                 else:
