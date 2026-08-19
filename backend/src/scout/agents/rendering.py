@@ -397,7 +397,14 @@ def _join_phrases(parts: list[str]) -> str:
     if len(parts) == 1:
         return parts[0]
     if len(parts) == 2:
-        return f"{parts[0]} and {parts[1]}"
+        # A comma before "and" is only genuinely needed when at least
+        # one item already contains its own internal comma (otherwise
+        # it's ambiguous where one item ends and the next begins, as in
+        # "white, size 8 with 4 pairs left and black, size 9..."). For
+        # simple items with no internal comma, "X and Y" reads more
+        # naturally without one - refined per direct feedback.
+        needs_comma = any("," in part for part in parts)
+        return f"{parts[0]}, and {parts[1]}" if needs_comma else f"{parts[0]} and {parts[1]}"
     return f"{', '.join(parts[:-1])}, and {parts[-1]}"
 
 
@@ -586,7 +593,15 @@ def _combine_same_product_variant_sentences(sentences: list[str]) -> list[str]:
             variants.append(f"{next_match.group(1)} in {next_match.group(2)}")
             j += 1
         if len(variants) > 1:
-            combined.append(f"The {product_name} has {_join_phrases(variants)} available.")
+            # Rebuilt for a more natural reading order: "available in
+            # [variant] with [N] left" rather than "has [N] in [variant]"
+            # repeated - refined per direct feedback on an earlier,
+            # more awkward phrasing.
+            variant_phrases = []
+            for v in variants:
+                qty, desc = v.split(" in ", 1)
+                variant_phrases.append(f"{desc} with {qty} pairs left" if "shoe" in product_name.lower() or "sneaker" in product_name.lower() else f"{desc} with {qty} left")
+            combined.append(f"The {product_name} are available in {_join_phrases(variant_phrases)}.")
         else:
             combined.append(sentences[i])
         i = j
