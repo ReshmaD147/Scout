@@ -1,7 +1,7 @@
 import itertools
 
 from scout.db.session import SessionLocal, init_db
-from scout.db.models import Product, Stock, Store, StoreStock, Order, OrderItem, ExternalProduct, Promotion, Shipment
+from scout.db.models import Product, Stock, Store, StoreStock, Order, OrderItem, ExternalProduct, Promotion, Shipment, Customer
 
 # ── PRODUCTS ──────────────────────────────────────────────────────────────
 # (product_id, name, brand, department, category, description, price, rating, tags)
@@ -161,6 +161,14 @@ def seed() -> None:
     # preserve known test case: Black Midi Dress at Maple Grove = qty 2
     session.query(StoreStock).filter_by(store_id="S01", product_id="P001").delete()
     session.add(StoreStock(store_id="S01", product_id="P001", quantity=2))
+
+    # ── customers ──
+    customers = [
+        Customer(customer_id="C001", name="Sarah Chen", email="sarah.chen@example.com"),
+        Customer(customer_id="C002", name="Marcus Bell", email="marcus.bell@example.com"),
+    ]
+    for customer in customers:
+        session.merge(customer)
 
     # ── orders ──
     orders = [

@@ -104,7 +104,7 @@ function productKey(product) {
 
 function ChatProductRail({ products, onInternalProductClick, sessionId, customerId }) {
   const title = products.some((product) => product.source === "external")
-    ? "Outside options"
+    ? "Vendor partner options"
     : "Recommended for you";
 
   return (

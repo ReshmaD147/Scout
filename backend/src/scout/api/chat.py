@@ -117,6 +117,7 @@ class DemoAuthSignOutRequest(BaseModel):
 class DemoAuthResponse(BaseModel):
     session_id: str
     authenticated_customer_id: str | None = None
+    customer_name: str | None = None
     demo_auth_enabled: bool
 
 
@@ -139,6 +140,15 @@ async def demo_auth_sign_in(body: DemoAuthRequest) -> DemoAuthResponse:
     if customer_id not in settings.demo_customer_ids:
         raise HTTPException(status_code=400, detail="Unknown demo customer.")
 
+    from scout.db.session import SessionLocal
+    from scout.db.models import Customer
+    db_session = SessionLocal()
+    try:
+        customer = db_session.query(Customer).filter_by(customer_id=customer_id).first()
+        customer_name = customer.name if customer else None
+    finally:
+        db_session.close()
+
     session_id = body.session_id or str(uuid.uuid4())
     context = SESSION_CONTEXTS.get(session_id, {})
     context["authenticated_customer_id"] = customer_id
@@ -148,6 +158,7 @@ async def demo_auth_sign_in(body: DemoAuthRequest) -> DemoAuthResponse:
     return DemoAuthResponse(
         session_id=session_id,
         authenticated_customer_id=customer_id,
+        customer_name=customer_name,
         demo_auth_enabled=True,
     )
 
@@ -177,6 +188,8 @@ async def account_summary(body: AccountSummaryRequest) -> dict:
 
     session = SessionLocal()
     try:
+        from scout.db.models import Customer
+        db_customer = session.query(Customer).filter_by(customer_id=customer_id).first()
         product_repo = ProductRepository(session)
         orders_result = list_orders_for_authenticated_customer(
             session,
@@ -208,8 +221,8 @@ async def account_summary(body: AccountSummaryRequest) -> dict:
     return {
         "customer": {
             "customer_id": customer_id,
-            "name": f"Demo Customer {customer_id[-1]}" if customer_id[-1:].isdigit() else "Demo Customer",
-            "email": latest_email or f"{customer_id.lower()}@demo.lumi.local",
+            "name": db_customer.name if db_customer else "Customer",
+            "email": latest_email or (db_customer.email if db_customer else f"{customer_id.lower()}@demo.lumi.local"),
             "demo_identity": True,
         },
         "orders": orders,

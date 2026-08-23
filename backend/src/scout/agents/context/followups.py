@@ -1054,7 +1054,7 @@ def _compare_current_recommendations_reply(products: list[dict]) -> str:
         )
         if cheaper:
             reply += f" {_product_name(cheaper)} is the lower-priced option."
-        reply += " Since these are outside retailers, please confirm sizing, shipping, and returns on their site before buying."
+        reply += " Since these are vendor partners, please confirm sizing, shipping, and returns on their site before buying."
         return reply
     lines = [
         f"Of course — here’s the quick version: {first_name} is {_format_money(first_price)}, and {second_name} is {_format_money(second_price)}."
@@ -1081,7 +1081,7 @@ def _cheaper_current_recommendations_reply(products: list[dict]) -> str | None:
     if cheapest.get("source") == "external":
         vendor = f" from {cheapest['vendor_name']}" if cheapest.get("vendor_name") else ""
         return (
-            f"Good question — {_product_name(cheapest)}{vendor} is the lowest-priced outside option I’m showing at {price_text}. "
+            f"Good question — {_product_name(cheapest)}{vendor} is the lowest-priced vendor partner option I’m showing at {price_text}. "
             "Because it’s from another retailer, please confirm the final price and availability on their site."
         )
     return (
@@ -1127,7 +1127,7 @@ def _resolve_recommendation_action_follow_up(message: str, context: dict) -> Str
             return StructuredIntent(
                 text=(
                     f"I checked Lumi’s own catalog for {description}, but I don’t see a matching item right now. "
-                    "The outside options above are separate retailer offers, so you would complete those purchases on their sites."
+                    "The vendor partner options above are separate retailer offers, so you would complete those purchases on their sites."
                 ),
                 request_type="recommendation_action_reply",
                 confidence=0.98,

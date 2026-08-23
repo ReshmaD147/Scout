@@ -59,6 +59,14 @@ class StoreStock(Base):
     store: Mapped["Store"] = relationship(back_populates="store_stock")
 
 
+class Customer(Base):
+    __tablename__ = "customers"
+
+    customer_id: Mapped[str] = mapped_column(String, primary_key=True)
+    name: Mapped[str] = mapped_column(String, nullable=False)
+    email: Mapped[str | None] = mapped_column(String, nullable=True)
+
+
 class Order(Base):
     __tablename__ = "orders"
 

@@ -104,7 +104,66 @@ export default function Layout() {
     <div className={layoutClasses}>
       <header className="layout-header">
         <Link to="/" className="layout-logo">
-          <span className="layout-logo-mark">L</span>
+          <span className="layout-logo-mark" aria-hidden="true">
+            <svg
+              width="22"
+              height="22"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
+              {/* Lumi Burst */}
+
+              <circle
+                cx="12"
+                cy="12"
+                r="2.2"
+                fill="currentColor"
+              />
+
+              <path
+                d="M12 4V7"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+
+              <path
+                d="M12 17V20"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+
+              <path
+                d="M5.1 8L7.7 9.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+
+              <path
+                d="M16.3 14.5L18.9 16"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+
+              <path
+                d="M5.1 16L7.7 14.5"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+
+              <path
+                d="M16.3 9.5L18.9 8"
+                stroke="currentColor"
+                strokeWidth="1.8"
+                strokeLinecap="round"
+              />
+            </svg>
+          </span>
           <span className="layout-logo-text">Lumi</span>
         </Link>
 

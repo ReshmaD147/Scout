@@ -5,6 +5,7 @@ const BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://127.0.0.1:8000";
 
 export function AuthProvider({ children }) {
   const [customerId, setCustomerId] = useState(null);
+  const [customerName, setCustomerName] = useState(null);
   const [sessionId, setSessionId] = useState(null);
   const [signingIn, setSigningIn] = useState(false);
 
@@ -21,6 +22,7 @@ export function AuthProvider({ children }) {
       }
       const data = await response.json();
       setCustomerId(demoCustomerId);
+      setCustomerName(data.customer_name || null);
       setSessionId(data.session_id);
       return data.session_id;
     } finally {
@@ -30,11 +32,13 @@ export function AuthProvider({ children }) {
 
   function signOut() {
     setCustomerId(null);
+    setCustomerName(null);
     setSessionId(null);
   }
 
   const value = {
     customerId,
+    customerName,
     sessionId,
     signingIn,
     isSignedIn: Boolean(customerId),

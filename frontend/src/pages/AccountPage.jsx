@@ -97,7 +97,7 @@ function CompactSavedItem({ product }) {
 }
 
 export default function AccountPage() {
-  const { customerId, sessionId, isSignedIn, signingIn, signInAsDemoCustomer, signOut } = useAuth();
+  const { customerId, customerName, sessionId, isSignedIn, signingIn, signInAsDemoCustomer, signOut } = useAuth();
   const { items: savedItems } = useSavedItems();
   const [summary, setSummary] = useState(null);
   const [expandedOrderId, setExpandedOrderId] = useState(null);
@@ -137,11 +137,11 @@ export default function AccountPage() {
         <section className="account-card account-signin-card">
           <div className="account-signin-icon" aria-hidden="true">👤</div>
           <div>
-            <p className="account-eyebrow">Demo account</p>
+            <p className="account-eyebrow">My account</p>
             <h1>Sign in to view your Lumi account</h1>
             <p>
               See protected order history, shipments, saved items, and Scout
-              recommendation feedback with the demo customer identity.
+              recommendation feedback for this account.
             </p>
           </div>
           <button
@@ -149,7 +149,7 @@ export default function AccountPage() {
             onClick={() => signInAsDemoCustomer("C001")}
             disabled={signingIn}
           >
-            {signingIn ? "Signing in…" : "Sign in as demo customer"}
+            {signingIn ? "Signing in…" : "Sign in as Sarah Chen"}
           </button>
         </section>
       </div>
@@ -158,7 +158,7 @@ export default function AccountPage() {
 
   const customer = summary?.customer || {
     customer_id: customerId,
-    name: "Demo Customer",
+    name: customerName || "Customer",
     email: `${String(customerId || "customer").toLowerCase()}@demo.lumi.local`,
     demo_identity: true,
   };
@@ -173,8 +173,7 @@ export default function AccountPage() {
           <h1>{formatCustomerName(customer)}</h1>
           <p>{customer.email}</p>
           <div className="account-identity-badges">
-            <span className="account-demo-pill">Demo identity: {customer.customer_id}</span>
-            <span className="account-protected-pill">Protected demo session</span>
+            <span className="account-protected-pill">Protected account</span>
           </div>
         </div>
         <button className="account-secondary-btn" onClick={signOut}>Sign out</button>
@@ -194,7 +193,7 @@ export default function AccountPage() {
           </div>
 
           {orders.length === 0 ? (
-            <p className="account-muted">No orders yet for this demo customer.</p>
+            <p className="account-muted">No orders yet for {customerName || "this account"}.</p>
           ) : (
             <div className="account-order-list">
               {orders.map((order) => {

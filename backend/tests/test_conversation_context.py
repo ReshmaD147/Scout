@@ -1062,7 +1062,7 @@ def test_external_compare_button_answers_from_external_cards_without_model():
     assert reply == (
         "Of course — here’s the quick comparison: Enid Satin Body-Con Evening Dress from Nordstrom Rack is $35.98, "
         "and Twist-Front Midi Dress from Target is $45.00. Enid Satin Body-Con Evening Dress is the lower-priced option. "
-        "Since these are outside retailers, please confirm sizing, shipping, and returns on their site before buying."
+        "Since these are vendor partners, please confirm sizing, shipping, and returns on their site before buying."
     )
     assert products == []
     assert app.graph_calls == 0
@@ -1100,7 +1100,7 @@ def test_external_cheaper_button_answers_from_external_cards_without_model():
     )
 
     assert reply == (
-        "Good question — Enid Satin Body-Con Evening Dress from Nordstrom Rack is the lowest-priced outside option I’m showing at $35.98. "
+        "Good question — Enid Satin Body-Con Evening Dress from Nordstrom Rack is the lowest-priced vendor partner option I’m showing at $35.98. "
         "Because it’s from another retailer, please confirm the final price and availability on their site."
     )
     assert products == []
@@ -1130,7 +1130,7 @@ def test_catalog_only_button_answers_honestly_from_external_context():
 
     assert reply == (
         "I checked Lumi’s own catalog for Lumi red dresses under $100, but I don’t see a matching item right now. "
-        "The outside options above are separate retailer offers, so you would complete those purchases on their sites."
+        "The vendor partner options above are separate retailer offers, so you would complete those purchases on their sites."
     )
     assert products == []
     assert app.graph_calls == 0
