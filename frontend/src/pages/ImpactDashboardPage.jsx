@@ -72,6 +72,17 @@ export default function ImpactDashboardPage() {
             </div>
           </div>
 
+          <div className="impact-flow">
+            <p className="impact-flow-title">How this revenue is tracked</p>
+            <div className="impact-flow-steps">
+              <span className="impact-flow-step">Scout Recommendation</span>
+              <span className="impact-flow-arrow">→</span>
+              <span className="impact-flow-step">Add to Cart</span>
+              <span className="impact-flow-arrow">→</span>
+              <span className="impact-flow-step">Paid Order</span>
+            </div>
+          </div>
+
           {asOf && (
             <p className="impact-freshness">
               Live as of {asOf.toLocaleTimeString()} — refresh to update

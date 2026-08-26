@@ -6,14 +6,14 @@ A major focus of the project is reliability and safety: Scout does not simply ge
 
 The guiding rule is simple: **anything that can cost money or trust stays deterministic; the model only helps with language-shaped assistance.**
 
-## Demo Highlights
+## Highlights
 
 - **Agentic commerce assistant:** recommendations, inventory checks, store availability, order status, policy Q&A, and external-offer fallback.
 - **Portfolio shopping journey:** Scout supports a verified flow from recommendation → size/stock check → cart add → Stripe checkout → order confirmation.
 - **Five specialists:** `recommend_agent`, `inventory_agent`, `order_agent`, `external_offer_agent`, and `policy_agent`, built with LangChain `create_agent` and reached through deterministic/direct routing or the Supervisor path when needed.
 - **Evidence-backed output:** tool calls produce structured evidence; proposed claims are verified before customer-visible factual replies and product cards are rebuilt from approved claims.
 - **Safe commerce boundary:** no checkout, payment, refund, cancellation, SQL, shell, or unrestricted HTTP tool is exposed to specialists. Checkout, inventory reservation, payment finalization, order creation, attribution, and analytics remain deterministic REST/service-layer behavior.
-- **Local demo mode:** `ENABLE_STRIPE_MCP=false MODEL_PROVIDER=ollama` starts the app without Stripe MCP discovery while preserving deterministic Stripe REST checkout code.
+- **Local development mode:** `ENABLE_STRIPE_MCP=false MODEL_PROVIDER=ollama` starts the app without Stripe MCP discovery while preserving deterministic Stripe REST checkout code.
 - **Recommendation-driven revenue tracking:** every recommendation is tagged with a verified `recommendation_id`, carried through cart and checkout, so completed sales can be independently attributed back to Scout — see the internal `/admin/impact` dashboard.
 - **Shipment tracking:** authenticated customers can ask about live carrier, status, and estimated delivery for their own orders, with the same read-only-tool and evidence/claims/verification boundary as everything else.
 - **Deterministic tool-first path:** clear, unambiguous requests (a specific recommendation, order lookup, or inventory check) bypass the language model entirely and call the appropriate tool directly — removing a real source of non-deterministic behavior for requests that don't need the model's judgment at all.
@@ -94,7 +94,7 @@ backend/
   tests/eval/            Live evaluation harness and release artifacts
 frontend/
   src/                   React storefront, local cart/saved state, chat widget
-docs/                    Portfolio, architecture, security, eval, demo docs
+docs/                    Portfolio, architecture, security, eval, and walkthrough docs
 ```
 
 ## Local Setup
@@ -119,7 +119,7 @@ python3 src/scout/rag/vector_store.py
 python3 src/scout/rag/product_embeddings.py
 ```
 
-For local Ollama demo mode:
+For local Ollama development mode:
 
 ```bash
 ollama pull qwen3:8b
@@ -193,7 +193,7 @@ VITE_STRIPE_PUBLISHABLE_KEY=...
 
 ### Railway Database Persistence
 
-SQLite is the local-development default. If a SQLite file lives inside the Railway backend container filesystem, Railway rebuilds can replace that filesystem and reset orders, recommendation feedback, seeded data, and other mutable demo state. That is acceptable for short local demos only if reseeding is expected; it is not production-ready persistence.
+SQLite is the local-development default. If a SQLite file lives inside the Railway backend container filesystem, Railway rebuilds can replace that filesystem and reset orders, recommendation feedback, seeded data, and other mutable demo state. That is acceptable for short local sessions only if reseeding is expected; it is not production-ready persistence.
 
 For a production-readiness improvement, prefer one of these paths:
 
@@ -207,10 +207,10 @@ For a production-readiness improvement, prefer one of these paths:
    DATABASE_URL=${{ Postgres.DATABASE_URL }}
    ```
 
-2. **Demo-only fallback: persistent SQLite volume**
+2. **Local-only fallback: persistent SQLite volume**
    - Attach a Railway volume and store the SQLite database at a volume-backed path such as `/data/scout.db`.
    - This prevents rebuild resets while keeping the deployment simple.
-   - This is less production-like than Postgres and should still be described as a demo persistence option.
+   - This is less production-like than Postgres and should still be described as a local-only persistence option.
 
 Until persistent storage is configured, the Railway SQLite database resets on backend rebuilds and needs reseeding:
 
@@ -254,11 +254,11 @@ Frontend: ESLint passing
 Frontend: production build passing
 ```
 
-Live-evaluation methodology and release metrics are summarized in [`docs/evaluation.md`](docs/evaluation.md). Run-specific JSON and log artifacts can be regenerated locally and do not need to be committed for the portfolio demo.
+Live-evaluation methodology and release metrics are summarized in [`docs/evaluation.md`](docs/evaluation.md). Run-specific JSON and log artifacts can be regenerated locally and do not need to be committed for the portfolio project.
 
-## Demo Flow
+## Sample Flow
 
-Use these as the live demo prompts:
+Use these as example prompts:
 
 ```text
 Recommend a dress under $80
@@ -267,7 +267,7 @@ Do you have a red cocktail dress under $100?
 Where is order O1001?
 ```
 
-Recommended live demo sequence:
+Recommended sequence:
 
 | Step | Query | What it proves |
 |---|---|---|
@@ -282,7 +282,7 @@ Recommended live demo sequence:
 | 9 | Click "Compare ..." on external options | External comparison stays external and reminds customers to confirm sizing, shipping, and returns with the outside retailer. |
 | 10 | Clear chat, then ask "Where is order O1001?" | Authenticated order + shipment support through read-only backend tools. |
 
-See [`docs/demo-script.md`](docs/demo-script.md) for the full talk track.
+See [`docs/walkthrough-script.md`](docs/walkthrough-script.md) for the full talk track.
 
 ## Business Impact
 
@@ -329,9 +329,9 @@ Together, these reinforce a core principle: Scout can assist and suggest, but th
 
 ## Known Limits
 
-- Order lookups fail closed without an authenticated customer context (see `docs/security.md`), and a local-only demo sign-in supports testing this — but there is no production-grade RBAC, rate limiting, human escalation, carrier integration, or warehouse integration.
-- The current Railway demo uses SQLite without guaranteed persistent storage unless a Railway volume or Postgres service is configured. For production readiness, move mutable app data to Railway Postgres and keep SQLite for local development/tests.
+- Order lookups fail closed without an authenticated customer context (see `docs/security.md`), and a local-only sign-in flow supports testing this — but there is no production-grade RBAC, rate limiting, human escalation, carrier integration, or warehouse integration.
+- The current Railway deployment uses SQLite without guaranteed persistent storage unless a Railway volume or Postgres service is configured. For production readiness, move mutable app data to Railway Postgres and keep SQLite for local development/tests.
 - Chat session history is in-memory; frontend cart/saved state is browser `localStorage`.
 - Ollama latency depends heavily on local hardware; release eval should run in isolation.
 - The verifier covers explicit Scout-domain claim types; it is not a formal proof system or broad semantic entailment engine.
-- External-offer images are allowlisted/seeded demo URLs; retailer CDNs can still be brittle outside the app's control.
+- External-offer images are allowlisted, pre-seeded URLs; retailer CDNs can still be brittle outside the app's control.
